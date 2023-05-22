@@ -10,7 +10,7 @@ tempgeo = [] # DEBUG
 text_cur = [] # DEBUG
 
 mesh = Mesh()
-mesh.update_default_vertex_attributes({"row": None, "column": None})
+mesh.update_default_vertex_attributes({"row": None, "column": None, "tri": None})
 
 
 for i, crv in enumerate(contour_curves):
@@ -66,12 +66,14 @@ for i, crv in enumerate(contour_curves):
             if anc_ind <= cur_ind and anc_ind_next <= cur_ind_next and anc_ind_next > anc_ind:
                 mesh.add_face([ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h+1], vkeys[h]])
                 print("1", [ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h+1], vkeys[h]])
+                
                 k += 1 
                 h += 1 
                 
             elif anc_ind_next == anc_ind:
                 mesh.add_face([ancestor_vkeys[k], vkeys[h+1], vkeys[h]])
                 print("2", [ancestor_vkeys[k], vkeys[h+1], vkeys[h]])
+                mesh.vertex_attribute(ancestor_vkeys[k], "tri", 0)
                 h += 1 
             
             elif anc_ind >= cur_ind and anc_ind_next >= cur_ind_next and cur_ind_next > cur_ind:
@@ -83,6 +85,7 @@ for i, crv in enumerate(contour_curves):
             elif cur_ind_next == cur_ind:
                 mesh.add_face([ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h]])
                 print("22", [ancestor_vkeys[k], ancestor_vkeys[h+1], vkeys[h]])
+                mesh.vertex_attribute(vkeys[h], "tri", 1)
                 k += 1 
             
             '''
