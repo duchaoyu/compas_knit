@@ -10,10 +10,11 @@ tempgeo = [] # DEBUG
 text_cur = [] # DEBUG
 
 mesh = Mesh()
-mesh.update_default_vertex_attributes({"row": None, "column": None})
+mesh.update_default_vertex_attributes({"row": None, "column": None, "tri": None})
 
 
 for i, crv in enumerate(contour_curves):
+    
     # divide the curve by length, get the points on the curve
     length = crv.GetLength()
     seg_count = int(length / course_dis)
@@ -27,7 +28,6 @@ for i, crv in enumerate(contour_curves):
         vkey = mesh.add_vertex(x=float(pt.X), y=float(pt.Y), z=float(pt.Z))
         mesh.vertex_attributes(vkey, ["row", "column"], [i, j])
         vkeys.append(vkey)
-    
     
     
     # add faces to the mesh
@@ -56,7 +56,7 @@ for i, crv in enumerate(contour_curves):
         
         # create faces
         count = 0
-        while k < ancestor_seg_count and h < seg_count and count < 50:
+        while k < ancestor_seg_count and h < seg_count and count < 150:
             count += 1
             anc_ind = ancestor_indices[h]
             cur_ind = current_indices[k]
@@ -66,12 +66,15 @@ for i, crv in enumerate(contour_curves):
             if anc_ind <= cur_ind and anc_ind_next <= cur_ind_next and anc_ind_next > anc_ind:
                 mesh.add_face([ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h+1], vkeys[h]])
                 print("1", [ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h+1], vkeys[h]])
+                
                 k += 1 
                 h += 1 
                 
             elif anc_ind_next == anc_ind:
+                # if mesh.edge_length(ancestor_vkeys[k], vkeys[h]) <= course_dis * 2:
                 mesh.add_face([ancestor_vkeys[k], vkeys[h+1], vkeys[h]])
                 print("2", [ancestor_vkeys[k], vkeys[h+1], vkeys[h]])
+                mesh.vertex_attribute(ancestor_vkeys[k], "tri", 0)
                 h += 1 
             
             elif anc_ind >= cur_ind and anc_ind_next >= cur_ind_next and cur_ind_next > cur_ind:
@@ -81,8 +84,10 @@ for i, crv in enumerate(contour_curves):
                 h += 1 
             
             elif cur_ind_next == cur_ind:
+                # if mesh.edge_length(ancestor_vkeys[k], vkeys[h]) <= course_dis * 2:
                 mesh.add_face([ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h]])
                 print("22", [ancestor_vkeys[k], ancestor_vkeys[h+1], vkeys[h]])
+                mesh.vertex_attribute(vkeys[h], "tri", 1)
                 k += 1 
             
             '''
@@ -112,8 +117,11 @@ for i, crv in enumerate(contour_curves):
             '''
         if k < ancestor_seg_count and h == seg_count:
             mesh.add_face([ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h]])
+            mesh.vertex_attribute(vkeys[h], "tri", 1)
+            
         elif k == ancestor_seg_count and h < seg_count:
             mesh.add_face([ancestor_vkeys[k], vkeys[h+1], vkeys[h]])
+            mesh.vertex_attribute(ancestor_vkeys[k], "tri", 0)
         
         '''
         # find the start vertex's cloest point in the ancestor row
@@ -160,4 +168,3 @@ for i, crv in enumerate(contour_curves):
         
 
 print(mesh)
-

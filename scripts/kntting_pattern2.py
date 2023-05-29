@@ -1,19 +1,23 @@
 __author__ = "duch"
 
 import os
-import rhinoscriptsyntax as rs
-import scriptcontext
-import Rhino.Geometry as rg
+
+# import System.Drawing as sd
+
 from itertools import chain
-import System.Drawing as sd
-import time
-start_time = time.time()
+from compas.datastructures import Mesh
+from compas_view2.app import App
+from compas.geometry import Polyline
 
-input_mesh.flip_cycles()
 
-mesh = input_mesh.copy()
+folder = "/Users/duch/Desktop/prototype/shanghai/knitting_pattern"
+filename = "mesh1.json"
+file = os.path.join(folder, filename)
+mesh = Mesh.from_json(file)
+
+# mesh.flip_cycles()
+
 temp_geo = []
-
 
 mesh.update_default_vertex_attributes({"checked": False})
 
@@ -22,6 +26,8 @@ max_col = 0
 min_row = 0
 max_row = 0
 bitmap_dict = {}
+
+
 
 def halfedge_loop_r_l(mesh, edge):
         """Find all edges on the same loop as the halfedge, in the direction of the halfedge.
@@ -37,7 +43,7 @@ def halfedge_loop_r_l(mesh, edge):
             The edges on the same loop as the given edge.
 
         """
-        toggle = 1
+        toggle = 0
         
         u, v = edge
         edges = [(u, v)]
@@ -107,7 +113,7 @@ def halfedge_loop_l_r(mesh, edge):
             The edges on the same loop as the given edge.
 
         """
-        toggle = 0
+        toggle = 1
         u, v = edge
         edges = [(u, v)]
         
@@ -131,7 +137,7 @@ def halfedge_loop_l_r(mesh, edge):
             edges.append((u, v))
             if v == edges[0][0]:
                 break
-
+        print("break", break_v)
         if break_v is not None:
             sel_edges = []                  
             for e in edges:
@@ -144,11 +150,11 @@ def halfedge_loop_l_r(mesh, edge):
         return edges
 
 
-def check_nbr_dir(mesh, vkey, vkey_prev = None, filter=True):
+def check_nbr_dir(mesh, vkey, filter=True):
     # parameters:
     #   mesh: input mesh
     #   vkey: the vertex to check
-    #   vkey_prev: the vertex previous of the vkey
+    #   dir: "l_r or r_l"
     #   filter: optional, whether filter the checked points
     # output: 
     #   list: [weft_nbrs, course_nbrs]
@@ -172,19 +178,29 @@ def check_nbr_dir(mesh, vkey, vkey_prev = None, filter=True):
         vkey, course_nbr = check_nbr_dir(mesh, wale_nbrs[0], filter=True)
         return vkey, course_nbr
     
+    
     course_nbr = course_nbrs[0]
+    if len(course_nbrs) == 1:
+        if mesh.vertex_attribute(course_nbr, "tri") == 1:
+            vkey, course_nbr = check_nbr_dir(mesh, course_nbr, filter=True)
+            return vkey, course_nbr
+        
     if len(course_nbrs) > 1:    
-        for can in course_nbrs:
-            if vkey_prev is None:
-                if mesh.vertex_attribute(can, "row") < mesh.vertex_attribute(course_nbr, "row"):
+        if mesh.vertex_attribute(vkey, "tri") == 0:
+            for can in course_nbrs:
+                if mesh.vertex_attribute(can, "row") > mesh.vertex_attribute(course_nbr, "row"):
                     course_nbr = can
                 elif mesh.vertex_attribute(can, "row") == mesh.vertex_attribute(course_nbr, "row"):
                     if mesh.vertex_attribute(can, "column") < mesh.vertex_attribute(course_nbr, "column"):
                         course_nbr = can
-            else:
-                if can in mesh.halfedge[vkey_prev].keys():
+        else:
+            for can in course_nbrs:
+                if mesh.vertex_attribute(can, "row") < mesh.vertex_attribute(course_nbr, "row"):
                     course_nbr = can
-                    break
+                elif mesh.vertex_attribute(can, "row") == mesh.vertex_attribute(course_nbr, "row"):
+                    if mesh.vertex_attribute(can, "column") < mesh.vertex_attribute(course_nbr, "column"):
+                        course_nbr
+
     return vkey, course_nbr
 
 
@@ -221,6 +237,7 @@ def course_l_r(mesh, start, filter=True):
     # output: 
     #   pts: list of point coordinates (x, y, z)
     start_, nbr = check_nbr_dir(mesh, start, filter=True)
+    print("debug", start_, nbr)
     
     loop = halfedge_loop_l_r(mesh, (start_, nbr))
     
@@ -251,55 +268,44 @@ def course_l_r(mesh, start, filter=True):
 
 
 
+
+mesh.delete_vertex(0)
+
 location = [0, 0]
 
+
 count = 0 
-while True and count < 100:
-    count += 1
+start =  1
 
-    # right to left
-    # --------------
-    # find the neighbour
-    
-    odd_vkeys, odd_pts = course_r_l(mesh, start, filter=True)
-    even_pts_r = [rg.Point3d(x=xyz[0], y=xyz[1], z=xyz[2]) for xyz in odd_pts]
-    temp_geo.extend(even_pts_r) 
-    
+try:
+    while True and count < 90:
+        count += 1
+
+        # right to left
+        # --------------
+        # find the neighbour
+        
+        odd_vkeys, odd_pts = course_r_l(mesh, start, filter=True)
+        temp_geo.extend(odd_pts) 
+        print(count, odd_vkeys)
 
 
-    # left to right
-    # --------------
-    # find the neighbour
-    
-    even_vkeys, even_pts = course_l_r(mesh, odd_vkeys[-1], filter=True)
-    even_pts_r = [rg.Point3d(x=xyz[0], y=xyz[1], z=xyz[2]) for xyz in even_pts]
-    temp_geo.extend(even_pts_r) 
-    
-    
-    
-    start = even_vkeys[-1]
-    if count >= 40:
-        print("count", count, "odd", odd_vkeys)
-        print("count", count, "even", odd_vkeys[-1], even_vkeys)
-        print(start)
-    
-    if time.time() - start_time > 10: # 1 minute limit
-        raise Exception("time's up!")
-    
-temp_geo.pop(-1)
+        # left to right
+        # --------------
+        # find the neighbour
+        
+        even_vkeys, even_pts = course_l_r(mesh, odd_vkeys[-1], filter=True)
+        temp_geo.extend(even_pts) 
+        print(count, even_vkeys)
+        
+        start = even_vkeys[-1]
+except:
+    print("end")
 
-loop = mesh.edge_loop((8, 23))
-loop_vkeys = chain.from_iterable(loop) # flatten the nested loop
-loop_set = set()
-vkeys = []
-pts = []
-for vkey in loop_vkeys:
-    if vkey not in loop_set:
-        mesh.vertex_attribute(vkey, "checked", True)
-        loop_set.add(vkey)
-        vkeys.append(vkey)
-        xyz = mesh.vertex_coordinates(vkey)
-        pts.append(xyz)
-even_pts_r = [rg.Point3d(x=xyz[0], y=xyz[1], z=xyz[2]) for xyz in pts]
-temp_geo.extend(even_pts_r)
-    
+polyline = Polyline(temp_geo)
+
+
+viewer = App()
+# viewer.add(mesh)
+viewer.add(polyline)
+viewer.show()
