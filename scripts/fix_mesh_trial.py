@@ -6,19 +6,34 @@
         a: The a output variable"""
 
 __author__ = "duch"
-import scriptcontext as sc
-import ghpythonlib.components as gh
-import Rhino.Geometry as rg
 
-"""
-for vkey in mesh.vertices():
-    print(vkey, dict(mesh.vertex_attributes(vkey)))
-"""
+from compas_view2.app import App
 from compas.datastructures import Mesh
+import os 
+from scipy.spatial import distance
+
+folder = "/Users/duch/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/2.0b4.0.9/c32ba60b0e0c097af1f49a1fd3ffcc42/Message/MessageTemp/0a4dca4fe97d182b230a6dfbca2d3f7c/File"
+
+filename_in = "mesh1_fix.json"
+file_in = os.path.join(folder, filename_in)
+mesh = Mesh.from_json(file_in)
+
 new_mesh = Mesh()
 new_mesh.update_default_vertex_attributes({"row": None, "column": None, "tri": None})
 
-row = 0 
+def closest(new_point, points):
+    closest_index = None
+    closest_dis = None
+    for i, point in enumerate(points):
+        # distance = ((point[0] - new_point[0])**2 + (point[1] - new_point[1])**2 + (point[2] - new_point[2])**2)**0.5
+        dis = distance.euclidean(point, new_point)
+        if closest_dis is None or dis < closest_dis:
+            closest_index = i
+            closest_dis = dis
+    return closest_index
+
+
+row = -1
 while True and row <= 100:
     col = 1
     vkeys = []
@@ -27,17 +42,18 @@ while True and row <= 100:
     
     while True and col <= 100:
         vertices = list(mesh.vertices_where({"row":row, "column": col}))
-        print(vertices)
         if vertices == []:
             break
-            
+        if len(vertices) != 1:
+            raise ValueError("wrong")
+        
         vertex = vertices[0]
         xyz = mesh.vertex_coordinates(vertex)
         vkey = new_mesh.add_vertex(x=xyz[0], y=xyz[1], z=xyz[2])
         new_mesh.vertex_attributes(vkey, ["row", "column"], [row, col])
         
         vkeys.append(vkey)
-        pts.append(sc.sticky['point_to_R'](xyz))
+        pts.append(xyz)
         
         col += 1
         
@@ -49,15 +65,15 @@ while True and row <= 100:
         ancestor_indices = []
         current_indices = []
         # for pt in the current row, find the closest point in the ancestor row 
-        # CAN BE OPTIMISED
+        # CAN BE OPTIMISED, QUADTREE
         for j, pt in enumerate(pts):
-            ancestor_index = gh.ClosestPoint(pt, ancestor_pts)[1]
+            ancestor_index = closest(pt, ancestor_pts)
             ancestor_indices.append(ancestor_index)
         
         # for pt in the ancestor row, find the closest point in the current row
         # CAN BE OPTIMISED
         for j, pt in enumerate(ancestor_pts):
-            current_index = gh.ClosestPoint(pt, pts)[1]
+            current_index = closest(pt, ancestor_pts)
             current_indices.append(current_index)
         
         
@@ -114,3 +130,7 @@ while True and row <= 100:
     ancestor_seg_count = seg_count
     ancestor_pts = pts
     ancestor_vkeys = vkeys
+
+viewer = App()
+viewer.add(mesh)
+viewer.show()

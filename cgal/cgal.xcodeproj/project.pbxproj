@@ -1,0 +1,74 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXFileReference section */
+		0A60C0EA2A8C0CF90014E54A /* cgal */ = {isa = PBXFileReference; lastKnownFileType = folder; name = cgal; path = ../../cgal; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0A60C0E32A8C0CDE0014E54A = {
+			isa = PBXGroup;
+			children = (
+				0A60C0EA2A8C0CF90014E54A /* cgal */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXProject section */
+		0A60C0E42A8C0CDE0014E54A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1430;
+			};
+			buildConfigurationList = 0A60C0E72A8C0CDE0014E54A /* Build configuration list for PBXProject "cgal" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 0A60C0E32A8C0CDE0014E54A;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+			);
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		0A60C0E82A8C0CDE0014E54A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		0A60C0E92A8C0CDE0014E54A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0A60C0E72A8C0CDE0014E54A /* Build configuration list for PBXProject "cgal" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0A60C0E82A8C0CDE0014E54A /* Debug */,
+				0A60C0E92A8C0CDE0014E54A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 0A60C0E42A8C0CDE0014E54A /* Project object */;
+}
