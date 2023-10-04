@@ -1,5 +1,5 @@
 from compas.datastructures import Mesh
-
+from compas.geometry import Polyline
 from compas_view2.app import App
 from compas_view2.shapes import Text
 import os
@@ -8,22 +8,27 @@ import numpy as np
 
 # import 
 path = os.path.abspath("/Users/duch/Documents/Github/compas_knit/src/cpp_libigl/build/temp/curve_pts.txt")
+# path = os.path.abspath("/Users/duch/Documents/PhD/knit/benchmarks/curve_pts.txt")
 
 # initialise the mesh
 mesh = Mesh() 
 mesh.update_default_vertex_attributes({"row": None, "column": None, "tri": None})
+mesh.update_default_edge_attributes({"dir": False})
 
 text_cur = [] # for debugging 
 
-
+polylines = []
 # read pts along the isoline
 with open(path, 'r') as i_file:
     # first row 
     i = 0
     line = i_file.readline().strip()
+    
     vkeys = []
-    pts = ast.literal_eval(line)
+    pts = ast.literal_eval(line) # for visualising the isocurves
     seg_count = len(pts) - 1
+
+    polylines.append(pts)
 
     for j, pt in enumerate(pts):
         vkey = mesh.add_vertex(x=pt[0], y=pt[1], z=pt[2])
@@ -45,6 +50,7 @@ with open(path, 'r') as i_file:
         pts = ast.literal_eval(line)
         vkeys = []
         seg_count = len(pts) - 1
+        polylines.append(pts)
 
         for j, pt in enumerate(pts):
             vkey = mesh.add_vertex(x=pt[0], y=pt[1], z=pt[2])
@@ -75,15 +81,18 @@ with open(path, 'r') as i_file:
         
         if ancestor_indices[0] != 0: 
             k = ancestor_indices[0]
-            if current_indices[ancestor_indices[0]] != 0:
-                mesh.add_face([ancestor_vkeys[k-1], ancestor_vkeys[k], vkeys[h]])
-                mesh.vertex_attribute(vkeys[h], "tri", 1)
+            # if current_indices[ancestor_indices[0]] != 0:
+            mesh.add_face([ancestor_vkeys[k-1], ancestor_vkeys[k], vkeys[h]])
+            mesh.vertex_attribute(vkeys[h], "tri", 1)
+            mesh.edge_attribute((ancestor_vkeys[k-1],  vkeys[h]), "dir", True)
+            mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h]), "dir", True)
         if current_indices[0] != 0: 
             h = current_indices[0]
-            if ancestor_indices[current_indices[0]] != 0:
-                mesh.add_face([ancestor_vkeys[k], vkeys[h], vkeys[h-1]])
-                mesh.vertex_attribute(ancestor_vkeys[k], "tri", 0)
-
+            # if ancestor_indices[current_indices[0]] != 0:
+            mesh.add_face([ancestor_vkeys[k], vkeys[h], vkeys[h-1]])
+            mesh.vertex_attribute(ancestor_vkeys[k], "tri", 0)
+            mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h]), "dir", True)
+            mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h-1]), "dir", True)
         # create faces
         count = 0
         while k < ancestor_seg_count and h < seg_count and count < 150: # count is for safety
@@ -96,7 +105,8 @@ with open(path, 'r') as i_file:
             if anc_ind <= cur_ind and anc_ind_next <= cur_ind_next and anc_ind_next > anc_ind:
                 mesh.add_face([ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h+1], vkeys[h]])
                 # print("1", [ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h+1], vkeys[h]])
-                
+                mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h]), "dir", True)
+                mesh.edge_attribute((ancestor_vkeys[k+1],  vkeys[h+1]), "dir", True)
                 k += 1 
                 h += 1 
                 
@@ -105,11 +115,15 @@ with open(path, 'r') as i_file:
                 mesh.add_face([ancestor_vkeys[k], vkeys[h+1], vkeys[h]])
                 # print("2", [ancestor_vkeys[k], vkeys[h+1], vkeys[h]])
                 mesh.vertex_attribute(ancestor_vkeys[k], "tri", 0)
+                mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h+1]), "dir", True)
+                mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h]), "dir", True)
                 h += 1 
             
             elif anc_ind >= cur_ind and anc_ind_next >= cur_ind_next and cur_ind_next > cur_ind:
                 mesh.add_face([ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h+1], vkeys[h]])
                 # print("11", [ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h+1], vkeys[h]])
+                mesh.edge_attribute((ancestor_vkeys[k+1],  vkeys[h+1]), "dir", True)
+                mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h]), "dir", True)
                 k += 1 
                 h += 1 
             
@@ -118,6 +132,8 @@ with open(path, 'r') as i_file:
                 mesh.add_face([ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h]])
                 # print("22", [ancestor_vkeys[k], ancestor_vkeys[h+1], vkeys[h]])
                 mesh.vertex_attribute(vkeys[h], "tri", 1)
+                mesh.edge_attribute((ancestor_vkeys[k+1],  vkeys[h]), "dir", True)
+                mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h]), "dir", True)
                 k += 1 
             
             '''
@@ -148,10 +164,14 @@ with open(path, 'r') as i_file:
         if k < ancestor_seg_count and h == seg_count:
             mesh.add_face([ancestor_vkeys[k], ancestor_vkeys[k+1], vkeys[h]])
             mesh.vertex_attribute(vkeys[h], "tri", 1)
+            mesh.edge_attribute((ancestor_vkeys[k+1],  vkeys[h]), "dir", True)
+            mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h]), "dir", True)
             
         elif k == ancestor_seg_count and h < seg_count:
             mesh.add_face([ancestor_vkeys[k], vkeys[h+1], vkeys[h]])
             mesh.vertex_attribute(ancestor_vkeys[k], "tri", 0)
+            mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h+1]), "dir", True)
+            mesh.edge_attribute((ancestor_vkeys[k],  vkeys[h]), "dir", True)
         
         '''
         # find the start vertex's cloest point in the ancestor row
@@ -200,12 +220,15 @@ with open(path, 'r') as i_file:
 
 viewer = App()
 viewer.add(mesh, show_faces=False)
+# for pts in polylines:
+#     polyline = Polyline(pts)
+#     viewer.add(polyline, linecolor=(0, 0., 0.7))
 
 # text objects 
-maxkey = len(list(mesh.vertices()))
+# maxkey = len(list(mesh.vertices()))
 
-for vkey in mesh.vertices():
-    txt = Text(str(vkey), mesh.vertex_coordinates(vkey), height=50)
-    viewer.add(txt, color=(vkey/maxkey, vkey/maxkey, 0))
+# for vkey in mesh.vertices():
+#     txt = Text(str(vkey), mesh.vertex_coordinates(vkey), height=50)
+#     viewer.add(txt, color=(vkey/maxkey, vkey/maxkey, 0))
 
 viewer.show()

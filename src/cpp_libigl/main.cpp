@@ -8,7 +8,6 @@
 #include <igl/material_colors.h>
 #include <igl/isolines.h>
 
-
 /*
 void set_colormap(igl::opengl::glfw::Viewer & viewer)
 {
@@ -27,59 +26,56 @@ void set_colormap(igl::opengl::glfw::Viewer & viewer)
 }
 */
 
-
 int main(int argc, char *argv[])
 {
-    Eigen::MatrixXd V;
-    Eigen::MatrixXi F;
+  Eigen::MatrixXd V;
+  Eigen::MatrixXi F;
 
+  // const std::string obj_path = "/Users/duch/documents/github/libigl-tutorial-data/data/snail.obj";
+  const std::string obj_path = "/Users/duch/Documents/PhD/knit/benchmarks/simple_shell_tri.obj";
+  igl::read_triangle_mesh(obj_path, V, F);
+  double t = std::pow(igl::avg_edge_length(V, F), 2); // time step, good result is half average length
 
-    const std::string obj_path = "/Users/duch/documents/github/libigl-tutorial-data/data/snail.obj";
-    igl::read_triangle_mesh(obj_path, V, F);
-    double t = std::pow(igl::avg_edge_length(V,F),2);  //time step, good result is half average length
-
-
-    // Precomputation
-    igl::HeatGeodesicsData<double> data;
-    const auto precompute = [&]()
+  // Precomputation
+  igl::HeatGeodesicsData<double> data;
+  const auto precompute = [&]()
+  {
+    if (!igl::heat_geodesics_precompute(V, F, t, data))
     {
-    if(!igl::heat_geodesics_precompute(V,F,t,data))
-    {
-        std::cerr<<"Error: heat_geodesics_precompute failed."<<std::endl;
-        exit(EXIT_FAILURE);
+      std::cerr << "Error: heat_geodesics_precompute failed." << std::endl;
+      exit(EXIT_FAILURE);
     };
-    };
-    precompute();
+  };
+  precompute();
 
-    // solve heat distance 
-    Eigen::VectorXd D;
-    Eigen::VectorXi gamma(2);
-    gamma << 3, 2;
-    igl::heat_geodesics_solve(data, gamma, D);
-    
-    // isolines
-    const int n = argc>2?atoi(argv[2]):128;
+  // solve heat distance
+  Eigen::VectorXd D;
+  Eigen::VectorXi gamma(48);
+  gamma << 2, 574, 292, 1044, 13, 579, 375, 890, 36, 1295, 1645, 56, 1510, 1313, 80, 1720, 1537, 96, 1131, 1347, 112, 535, 1944, 1750, 652, 163, 536, 1136, 1551, 643, 195, 1338, 1538, 210, 1118, 1511, 234, 1296, 304, 1472, 255, 376, 1259, 273, 1045, 293, 725, 283;
+  igl::heat_geodesics_solve(data, gamma, D);
 
-    float maxdis = D.maxCoeff();
-    float target_dis = 0.1;
-    double result = maxdis / target_dis;
-    int num = static_cast<int>(result);
+  // isolines
+  const int n = argc > 2 ? atoi(argv[2]) : 128;
 
+  float maxdis = D.maxCoeff();
+  float target_dis = 0.5;  // distance between the lines
+  double result = maxdis / target_dis;
+  int num = static_cast<int>(result);
 
-    Eigen::VectorXd vals = Eigen::VectorXd::LinSpaced(num+2, 0, D.maxCoeff());
-    Eigen::MatrixXd iV;
-    Eigen::MatrixXi iE;
-    Eigen::VectorXi I;
+  Eigen::VectorXd vals = Eigen::VectorXd::LinSpaced(num + 2, 0, D.maxCoeff());
+  Eigen::MatrixXd iV;
+  Eigen::MatrixXi iE;
+  Eigen::VectorXi I;
 
-    igl::isolines(V,F,D,vals,iV,iE,I);
+  igl::isolines(V, F, D, vals, iV, iE, I);
 
-    // std::cout << I << std::endl;
-
-
-
-{
+  std::cout << V << F << iV << std::endl;
+  
+  
+  {
     // Open a file for writing
-    std::ofstream file("/Users/duch/documents/github/compas_knit/src/cpp_libigl/build/temp/output.txt");
+    // std::ofstream file("/Users/duch/documents/github/compas_knit/src/cpp_libigl/build/temp/output.txt");
+    std::ofstream file("/Users/duch/Documents/PhD/knit/benchmarks/output.txt");
 
     // Redirect std::cout to the file
     std::streambuf* original_cout = std::cout.rdbuf();
@@ -92,16 +88,12 @@ int main(int argc, char *argv[])
     std::cout << std::endl;
     std::cout << I << std::endl;
 
-
     // Restore the original std::cout buffer
     std::cout.rdbuf(original_cout);
 
     // Close the file
     file.close();
-}
-
-
-
+  }
 
   // init the viewer
   igl::opengl::glfw::Viewer viewer;
@@ -110,20 +102,20 @@ int main(int argc, char *argv[])
 
   viewer.data().set_mesh(V, F);
   viewer.data().label_size = 10;
-  viewer.data().add_label(viewer.data().V.row(0) + viewer.data().V_normals.row(0).normalized()*0.005, "Hello World!");
+  viewer.data().add_label(viewer.data().V.row(0) + viewer.data().V_normals.row(0).normalized() * 0.005, "Hello World!");
 
   viewer.data().set_face_based(true);
   viewer.data().show_faces = true;
   viewer.data().show_lines = false;
   viewer.data().uniform_colors(
-    Eigen::Vector3d(0.94*viewer.core().background_color.head<3>().cast<double>()),
-    Eigen::Vector3d(0.05*viewer.core().background_color.head<3>().cast<double>()),
-    Eigen::Vector3d(0.01*viewer.core().background_color.head<3>().cast<double>()));
+      Eigen::Vector3d(0.94 * viewer.core().background_color.head<3>().cast<double>()),
+      Eigen::Vector3d(0.05 * viewer.core().background_color.head<3>().cast<double>()),
+      Eigen::Vector3d(0.01 * viewer.core().background_color.head<3>().cast<double>()));
 
   viewer.core().lighting_factor = 0.5;
-  viewer.data().set_edges(iV, iE, 
-      Eigen::RowVector3d(igl::GOLD_DIFFUSE[0], igl::GOLD_DIFFUSE[1], igl::GOLD_DIFFUSE[2]));
+  viewer.data().set_edges(iV, iE,
+                          Eigen::RowVector3d(igl::GOLD_DIFFUSE[0], igl::GOLD_DIFFUSE[1], igl::GOLD_DIFFUSE[2]));
   viewer.data().line_width = 1;
-  
+
   viewer.launch();
 }

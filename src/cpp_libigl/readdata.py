@@ -2,7 +2,9 @@ import os
 
 # this is the file from cpp
 # it contains xyz, edge pairs, and which isoline it belongs to 
-file = os.path.abspath("/Users/duch/Documents/Github/compas_knit/src/cpp_libigl/build/temp/output.txt")
+# file = os.path.abspath("/Users/duch/Documents/Github/compas_knit/src/cpp_libigl/build/temp/output.txt")
+file = os.path.abspath("/Users/duch/Documents/PhD/knit/benchmarks/output.txt")
+
 
 with open(file, "r") as i_file:
     # read xyzs 
