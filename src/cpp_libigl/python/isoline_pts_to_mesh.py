@@ -7,8 +7,8 @@ import ast
 import numpy as np
 
 # import 
-path = os.path.abspath("/Users/duch/Documents/Github/compas_knit/src/cpp_libigl/build/temp/curve_pts.txt")
-# path = os.path.abspath("/Users/duch/Documents/PhD/knit/benchmarks/curve_pts.txt")
+# path = os.path.abspath("/Users/duch/Documents/Github/compas_knit/src/cpp_libigl/build/temp/curve_pts.txt")
+path = os.path.abspath("/Users/duch/Documents/PhD/knit/benchmarks/semisphere_output.txt")
 
 # initialise the mesh
 mesh = Mesh() 
@@ -25,7 +25,7 @@ with open(path, 'r') as i_file:
     line = i_file.readline().strip()
     
     vkeys = []
-    pts = ast.literal_eval(line) # for visualising the isocurves
+    pts = ast.literal_eval(line)  # for visualising the isocurves
     seg_count = len(pts) - 1
 
     polylines.append(pts)

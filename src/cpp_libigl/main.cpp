@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
   Eigen::MatrixXi F;
 
   // const std::string obj_path = "/Users/duch/documents/github/libigl-tutorial-data/data/snail.obj";
-  const std::string obj_path = "/Users/duch/Documents/PhD/knit/benchmarks/simple_shell_tri.obj";
+  const std::string obj_path = "/Users/duch/Documents/PhD/knit/benchmarks/semisphere.obj";
   igl::read_triangle_mesh(obj_path, V, F);
   double t = std::pow(igl::avg_edge_length(V, F), 2); // time step, good result is half average length
 
@@ -50,15 +50,15 @@ int main(int argc, char *argv[])
 
   // solve heat distance
   Eigen::VectorXd D;
-  Eigen::VectorXi gamma(48);
-  gamma << 2, 574, 292, 1044, 13, 579, 375, 890, 36, 1295, 1645, 56, 1510, 1313, 80, 1720, 1537, 96, 1131, 1347, 112, 535, 1944, 1750, 652, 163, 536, 1136, 1551, 643, 195, 1338, 1538, 210, 1118, 1511, 234, 1296, 304, 1472, 255, 376, 1259, 273, 1045, 293, 725, 283;
+  Eigen::VectorXi gamma(7);
+  gamma << 0, 2, 5, 12, 25, 33, 839;
   igl::heat_geodesics_solve(data, gamma, D);
 
   // isolines
   const int n = argc > 2 ? atoi(argv[2]) : 128;
 
   float maxdis = D.maxCoeff();
-  float target_dis = 0.5;  // distance between the lines
+  float target_dis = 3;  // distance between the lines
   double result = maxdis / target_dis;
   int num = static_cast<int>(result);
 
@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
   {
     // Open a file for writing
     // std::ofstream file("/Users/duch/documents/github/compas_knit/src/cpp_libigl/build/temp/output.txt");
-    std::ofstream file("/Users/duch/Documents/PhD/knit/benchmarks/output.txt");
+    std::ofstream file("/Users/duch/Documents/PhD/knit/benchmarks/semisphere_output.txt");
 
     // Redirect std::cout to the file
     std::streambuf* original_cout = std::cout.rdbuf();
