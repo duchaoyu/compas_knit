@@ -8,6 +8,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
 import os
 import subprocess
 
@@ -20,13 +21,13 @@ from compas.geometry import Polyline
 from compas_knit import HOME
 
 
-__all__ = ["generate_stripes", "check_trajectories", "read_trajectories"]
+__all__ = ["generate_stripes", "check_trajectories", "order_trajectories", "read_trajectories", "read_neighbours", "read_singularities"]
 
 
 STRIPES_EXE = os.environ.get("COMPAS_KNIT_STRIPES", os.path.join(HOME, "src", "cpp_stripes", "build", "stripes"))
 
 
-def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, out_dir=None, view=False, check=True):
+def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, stitch_width=None, out_dir=None, view=False, check=True):
     """Extract equally spaced knitting trajectories from a directional field.
 
     Parameters
@@ -39,8 +40,12 @@ def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, out_dir=
         Stitch height st_h at theoretical zero stress, in the units of the mesh.
     stretch : float, optional
         Pre-strain stretch factor along the wale. The spacing is divided by it, see Section 6.3.3.
+    stitch_width : float, optional
+        Also divide the trajectories into stitches of this width, one point per stitch, as Grasshopper's
+        DivideDistance, and write them to ``<name>_tri_path_recons.txt``. In the units of the mesh.
     out_dir : str, optional
-        Where to write ``<name>_remesh.obj`` and ``<name>_tri_path.txt``. Defaults to the mesh directory.
+        Where to write ``<name>_remesh.obj``, ``<name>_tri_path.txt`` and ``<name>_neighbours.txt``, see
+        :func:`read_neighbours`. Defaults to the mesh directory.
     view : bool, optional
         Show the field and the trajectories in polyscope. Blocks until the window is closed.
     check : bool, optional
@@ -49,7 +54,8 @@ def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, out_dir=
     Returns
     -------
     list[:class:`compas.geometry.Polyline`]
-        The trajectories, unordered, in mesh coordinates.
+        The trajectories, unordered, all running the same way along field x normal, in mesh coordinates. With ``stitch_width``, the trajectories divided
+        into stitches, leaving out those shorter than one stitch.
 
     """
     if not os.path.isfile(STRIPES_EXE):
@@ -73,6 +79,8 @@ def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, out_dir=
         "--size", "0",  # keep the mesh units, so the spacing is in the same units as the stitch height
         "--out-dir", out_dir,
     ]
+    if stitch_width:
+        cmd += ["--stitch-width", repr(stitch_width)]
     if view:
         cmd.append("--view")
     subprocess.check_call(cmd)
@@ -81,6 +89,8 @@ def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, out_dir=
     if check:
         for i, j, angle in check_trajectories(trajectories, mesh_path, field_path):
             print("warning: trajectory {} segment {} runs {:.0f} degrees from the field, it may join two trajectories".format(i, j, angle))
+    if stitch_width:
+        return read_trajectories(os.path.join(out_dir, name + "_tri_path_recons.txt"))
     return trajectories
 
 
@@ -162,3 +172,107 @@ def read_trajectories(path):
             points = [[float(c) for c in point.split(",")] for point in line.split(";")]
             polylines.append(Polyline(points))
     return polylines
+
+
+def read_neighbours(path):
+    """Read a ``_neighbours.txt`` file: which trajectory comes after which along the field.
+
+    Two trajectories are neighbours where they cross a mesh edge next to each other, and the one further
+    along the field comes after the other. Indices refer to the trajectories in ``_tri_path.txt`` and, with
+    a stitch width, ``_tri_path_recons.txt``, in the order of their lines.
+
+    Returns
+    -------
+    list[tuple[int, int, int]]
+        For each link, the trajectory before, the trajectory after, and the number of mesh edges on which
+        they are adjacent, a measure of the length they share. Next to the end of a short row, the
+        trajectories on either side of its tip are adjacent on only one or two edges.
+
+    """
+    links = []
+    with open(path, "r") as f:
+        for line in f:
+            if line.strip():
+                a, b, n = (int(v) for v in line.split())
+                links.append((a, b, n))
+    return links
+
+
+def order_trajectories(links, n):
+    """Position of each trajectory in the knitting order, from the links between neighbours.
+
+    A trajectory's position is the length of the longest chain of links leading to it, so every trajectory
+    comes after all the trajectories linked before it. Short rows share positions with the courses beside them.
+
+    Parameters
+    ----------
+    links : list[tuple[int, int, int]]
+        As returned by :func:`read_neighbours`.
+    n : int
+        The number of trajectories.
+
+    Returns
+    -------
+    tuple[list[int], list[int]]
+        The position of each trajectory, from 0, and the trajectories on a cycle of links, or after one.
+        Where the links close on themselves, for instance where the courses run around a pole, there is no
+        first or last and the knitting needs a seam; these trajectories get the position after the last
+        one leading into them.
+
+    """
+    after = [[] for _ in range(n)]
+    before = [[] for _ in range(n)]
+    for a, b, _ in links:
+        after[a].append(b)
+        before[b].append(a)
+    waiting = [len(before[i]) for i in range(n)]
+    position = [0] * n
+    queue = [i for i in range(n) if waiting[i] == 0]
+    done = [False] * n
+    while queue:
+        a = queue.pop()
+        done[a] = True
+        for b in after[a]:
+            position[b] = max(position[b], position[a] + 1)
+            waiting[b] -= 1
+            if waiting[b] == 0:
+                queue.append(b)
+    cyclic = [i for i in range(n) if not done[i]]
+    # on a cycle, place each trajectory once, after the placed trajectories leading into it, in the order they are reached
+    reached = collections.deque(i for i in cyclic if any(done[a] for a in before[i]))
+    unreached = list(reversed(cyclic))
+    while reached or unreached:
+        if not reached:
+            i = unreached.pop()
+            if done[i]:
+                continue
+            reached.append(i)  # a cycle nothing leads into: start it anywhere
+        i = reached.popleft()
+        if done[i]:
+            continue
+        position[i] = max([position[a] + 1 for a in before[i] if done[a]] or [0])
+        done[i] = True
+        reached.extend(b for b in after[i] if not done[b])
+    return position, cyclic
+
+
+def read_singularities(path):
+    """Read a ``_singularities.txt`` file: the singular triangles, at their centres.
+
+    Returns
+    -------
+    list[tuple[str, list[float], int]]
+        For each, its kind, its position and its index. ``"stripe"``: a singularity of the stripe pattern,
+        where trajectories end, the index the number of stripes more on one side than on the other, with its sign.
+        ``"field"``: a singularity of the directional field, the index in half turns, e.g. 1 for a
+        half-turn, 2 for a pole.
+
+    """
+    singularities = []
+    with open(path, "r") as f:
+        for line in f:
+            if line.strip():
+                kind, x, y, z, index = line.split()
+                singularities.append((kind, [float(x), float(y), float(z)], int(index)))
+    return singularities
+

@@ -35,7 +35,12 @@ Inputs, in `<folder>`:
 
 Outputs, in `<folder>` (or `--out-dir`):
 - `<name>_remesh.obj`, the mesh rescaled so its largest extent is `--size` (`--size 0` keeps the mesh units)
-- `<name>_tri_path.txt`, one trajectory per line, `x,y,z; x,y,z; ...`
+- `<name>_tri_path.txt`, one trajectory per line, `x,y,z; x,y,z; ...`, all running the same way along field × normal
+- with `--stitch-width <w>`, `<name>_tri_path_recons.txt`, the trajectories divided into stitches of width `<w>`,
+  one point per stitch, as Grasshopper's DivideDistance
+- `<name>_neighbours.txt`, one link per line, `a b n`: trajectory `b` comes after `a` along the field,
+  adjacent on `n` mesh edges
+- `<name>_singularities.txt`, one singular triangle per line, `stripe|field x y z index`, at its centre
 - with `--face-field <file>`, the field averaged onto each face, one `x y z` per face
 
 `--spacing` is in the units of the rescaled mesh, and is the course spacing 2·st_h

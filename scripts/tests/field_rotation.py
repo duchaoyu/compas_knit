@@ -6,7 +6,7 @@ so the angles run from 0 up to 180 degrees. For every angle this writes the traj
 `field_rotation.png`, with a top view per angle and the spacing, singularities and trajectory
 count against the angle.
 
-    python scripts/field_rotation.py
+    python scripts/tests/field_rotation.py
 """
 import json
 import os

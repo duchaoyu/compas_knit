@@ -9,10 +9,15 @@
 //
 // outputs, written next to the mesh unless --out-dir is given:
 //   <name>_remesh.obj   the mesh rescaled to --size (unchanged with --size 0), which the trajectories live on
-//   <name>_tri_path.txt one polyline per line, "x,y,z; x,y,z; ..."
+//   <name>_tri_path.txt one polyline per line, "x,y,z; x,y,z; ...", all running the same way, field x normal
+//   <name>_tri_path_recons.txt  with --stitch-width, the trajectories divided into stitches, one point per stitch
+//   <name>_neighbours.txt  one link per line, "a b n": trajectory b comes after a along the field, adjacent on n mesh edges
+//   <name>_singularities.txt  one singular triangle per line, "stripe|field x y z index", at the triangle centre
 
 #include "polyline.h"
 #include "singularities.h"
+#include "neighbours.h"
+#include "stitches.h"
 
 #include <geometrycentral/surface/manifold_surface_mesh.h>
 #include <geometrycentral/surface/meshio.h>
@@ -47,6 +52,8 @@ const char* USAGE = R"(usage: stripes <mesh.obj> --spacing <s> [options]
   --field <file>       per-vertex directional field (default <name>_vertex_directional_field.txt)
   --out-dir <dir>      where to write the outputs (default: the mesh directory)
   --face-field <file>  also write the field averaged onto each face, one "x y z" per face
+  --stitch-width <w>   also write the trajectories divided into stitches of width <w>, one point per stitch,
+                       to <name>_tri_path_recons.txt (in units of the rescaled mesh)
   --view               show the field and the trajectories in polyscope
 )";
 
@@ -92,6 +99,7 @@ int main(int argc, char** argv)
 {
   std::string meshPath, fieldPath, outDir, faceFieldPath;
   double spacing = -1;
+  double stitchWidth = 0;
   double size = 1000;
   bool view = false;
 
@@ -116,6 +124,8 @@ int main(int argc, char** argv)
       outDir = value();
     else if(arg == "--face-field")
       faceFieldPath = value();
+    else if(arg == "--stitch-width")
+      stitchWidth = std::stod(value());
     else if(arg == "--view")
       view = true;
     else if(arg == "-h" || arg == "--help")
@@ -144,6 +154,9 @@ int main(int argc, char** argv)
     fieldPath = (mesh_file.parent_path() / (name + "_vertex_directional_field.txt")).string();
   std::string remeshPath = (dir / (name + "_remesh.obj")).string();
   std::string polylinePath = (dir / (name + "_tri_path.txt")).string();
+  std::string stitchPath = (dir / (name + "_tri_path_recons.txt")).string();
+  std::string neighbourPath = (dir / (name + "_neighbours.txt")).string();
+  std::string singularityPath = (dir / (name + "_singularities.txt")).string();
 
   Eigen::MatrixXd V;
   Eigen::MatrixXi F;
@@ -234,20 +247,92 @@ int main(int argc, char** argv)
   std::cout << nSingular << " stripe singularities, " << looseEnds << " trajectories end at one" << std::endl;
   auto polylines = edgeToPolyline(points, edges);
 
-  std::ofstream file(polylinePath);
-  for(const auto& polyline: polylines)
+  // make all the trajectories run the same way, field x normal, as the Grasshopper definition did by flipping
+  // the curves that did not start at a hand-placed plane
+  geometry->requireVertexNormals();
+  std::vector<Vector3> positions, normals, field;
+  for(Vertex v: mesh->vertices())
   {
-    for(size_t i = 0; i < polyline.size(); ++i)
-    {
-      const auto& point = polyline[i];
-      file << point[0] << "," << point[1] << "," << point[2];
-      if(i < polyline.size() - 1)
-        file << "; ";
-    }
-    file << "\n";
+    positions.push_back(geometry->vertexPositions[v]);
+    normals.push_back(geometry->vertexNormals[v]);
+    field.push_back({VD(v.getIndex(), 0), VD(v.getIndex(), 1), VD(v.getIndex(), 2)});
   }
-  file.close();
+  size_t nReversed = orientAcrossField(polylines, positions, normals, field);
+  std::cout << "Reversed " << nReversed << " trajectories to run the same way across the field" << std::endl;
+
+  auto writePolylines = [](const std::string& path, const std::vector<std::vector<Vector3>>& polylines) {
+    std::ofstream file(path);
+    file << std::setprecision(10);
+    for(const auto& polyline: polylines)
+    {
+      for(size_t i = 0; i < polyline.size(); ++i)
+      {
+        const auto& point = polyline[i];
+        file << point[0] << "," << point[1] << "," << point[2];
+        if(i < polyline.size() - 1)
+          file << "; ";
+      }
+      file << "\n";
+    }
+  };
+  // with stitches, trajectories shorter than one stitch are left out of all the outputs, so that a trajectory
+  // has the same index in each of them
+  std::vector<std::vector<Vector3>> stitches;
+  size_t nStitches = 0;
+  if(stitchWidth > 0)
+  {
+    std::vector<std::vector<Vector3>> kept;
+    for(const auto& polyline: polylines)
+    {
+      auto divided = divideDistance(polyline, stitchWidth);
+      if(divided.size() < 2)
+        continue;
+      nStitches += divided.size();
+      stitches.push_back(divided);
+      kept.push_back(polyline);
+    }
+    std::cout << polylines.size() - kept.size() << " trajectories shorter than a stitch left out" << std::endl;
+    polylines = kept;
+  }
+
+  writePolylines(polylinePath, polylines);
   std::cout << "Wrote " << polylines.size() << " trajectories to " << polylinePath << std::endl;
+  if(stitchWidth > 0)
+  {
+    writePolylines(stitchPath, stitches);
+    std::cout << "Wrote " << nStitches << " stitches to " << stitchPath << std::endl;
+  }
+
+  // which trajectory comes after which along the field
+  auto links = findNeighbours(*geometry, stripeValues, stripeIndices, polylines, field);
+  {
+    std::ofstream file(neighbourPath);
+    for(const Link& link: links)
+      file << link.prev << " " << link.next << " " << link.edges << "\n";
+  }
+  std::cout << "Wrote " << links.size() << " links between neighbouring trajectories to " << neighbourPath << std::endl;
+
+  // the singular triangles, at their centres: of the stripe pattern, where a trajectory ends, and of the field
+  {
+    std::ofstream file(singularityPath);
+    file << std::setprecision(10);
+    size_t nField = 0;
+    for(Face f: mesh->faces())
+    {
+      Vector3 c{0.0, 0.0, 0.0};
+      for(Vertex v: f.adjacentVertices())
+        c += geometry->vertexPositions[v] / 3.0;
+      if(stripeIndices[f] != 0)
+        file << "stripe " << c.x << " " << c.y << " " << c.z << " " << stripeIndices[f] << "\n";
+      if(fieldIndices[f] != 0)
+      {
+        file << "field " << c.x << " " << c.y << " " << c.z << " " << fieldIndices[f] << "\n";
+        ++nField;
+      }
+    }
+    std::cout << "Wrote " << nSingular << " stripe and " << nField << " field singularities to " << singularityPath
+              << std::endl;
+  }
 
   // the input field averaged onto each face, in world coordinates
   FaceData<Vector3> faceField(*mesh);

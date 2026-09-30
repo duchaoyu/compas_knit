@@ -1,0 +1,6 @@
+# GitBook Git Sync: the book lives in docs/book, next to the Sphinx docs in docs/
+root: ./docs/book/
+
+structure:
+  readme: README.md
+  summary: SUMMARY.md
