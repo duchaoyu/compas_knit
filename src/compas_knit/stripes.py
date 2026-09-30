@@ -27,7 +27,18 @@ __all__ = ["generate_stripes", "check_trajectories", "order_trajectories", "read
 STRIPES_EXE = os.environ.get("COMPAS_KNIT_STRIPES", os.path.join(HOME, "src", "cpp_stripes", "build", "stripes"))
 
 
-def generate_stripes(mesh_path, field_path, stitch_height, stitch_width, stretch=1.0, out_dir=None, view=False, check=True):
+def generate_stripes(
+    mesh_path,
+    field_path,
+    stitch_height,
+    stitch_width,
+    stretch_wale=1.0,
+    stretch_course=1.0,
+    max_edge=None,
+    out_dir=None,
+    view=False,
+    check=True,
+):
     """Extract equally spaced knitting trajectories from a directional field, divided into stitches.
 
     Parameters
@@ -41,8 +52,17 @@ def generate_stripes(mesh_path, field_path, stitch_height, stitch_width, stretch
     stitch_width : float
         Stitch width st_w, in the units of the mesh. The trajectories are divided into stitches of this width,
         one point per stitch, as Grasshopper's DivideDistance, written to ``<name>_tri_path_recons.txt``.
-    stretch : float, optional
-        Pre-strain stretch factor along the wale. The spacing is divided by it, see Section 6.3.3.
+    stretch_wale : float, optional
+        Pre-strain stretch factor along the wale, the direction of the field: the stitch height, and so the spacing of
+        the trajectories, is divided by it, see Section 6.3.3.
+    stretch_course : float, optional
+        Pre-strain stretch factor along the course, across the field: the stitch width is divided by it.
+    max_edge : float, optional
+        Refine the mesh until no edge is longer, in the units of the mesh; by default the stitch width on the mesh,
+        ``stitch_width / stretch_course``. Where a
+        trajectory ends at a singularity of the stripe pattern, it stops about half an edge from it, so the edge
+        length sets the gap left in the knit there. The refined mesh and its field are written to
+        ``<name>_remesh.obj`` and ``<name>_remesh_vertex_directional_field.txt``.
     out_dir : str, optional
         Where to write ``<name>_remesh.obj``, ``<name>_tri_path.txt``, ``<name>_tri_path_recons.txt``,
         ``<name>_neighbours.txt`` (see :func:`read_neighbours`) and ``<name>_singularities.txt``.
@@ -66,7 +86,9 @@ def generate_stripes(mesh_path, field_path, stitch_height, stitch_width, stretch
             "or point COMPAS_KNIT_STRIPES at it.".format(STRIPES_EXE)
         )
 
-    spacing = 2 * stitch_height / stretch
+    # the stitch size on the mesh
+    spacing = 2 * stitch_height / stretch_wale
+    width = stitch_width / stretch_course
     name = os.path.splitext(os.path.basename(mesh_path))[0]
     out_dir = out_dir or os.path.dirname(os.path.abspath(mesh_path))
     if not os.path.isdir(out_dir):
@@ -78,9 +100,11 @@ def generate_stripes(mesh_path, field_path, stitch_height, stitch_width, stretch
         "--field", field_path,
         "--spacing", repr(spacing),
         "--size", "0",  # keep the mesh units, so the spacing is in the same units as the stitch height
-        "--stitch-width", repr(stitch_width),
+        "--stitch-width", repr(width),
         "--out-dir", out_dir,
     ]
+    if max_edge:
+        cmd += ["--max-edge", repr(max_edge)]
     if view:
         cmd.append("--view")
     subprocess.check_call(cmd)
@@ -213,16 +237,15 @@ def read_trajectories(path):
 def read_neighbours(path):
     """Read a ``_neighbours.txt`` file: which trajectory comes after which along the field.
 
-    Two trajectories are neighbours where they cross a mesh edge next to each other, and the one further
-    along the field comes after the other. Indices refer to the trajectories in ``_tri_path.txt`` and, with
+    From the middle of each segment, the line along the field is followed both ways to the first trajectory
+    it crosses within 1.5 spacings: the one ahead along the field comes after, the one behind before. Indices refer to the trajectories in ``_tri_path.txt`` and, with
     a stitch width, ``_tri_path_recons.txt``, in the order of their lines.
 
     Returns
     -------
     list[tuple[int, int, int]]
-        For each link, the trajectory before, the trajectory after, and the number of mesh edges on which
-        they are adjacent, a measure of the length they share. Next to the end of a short row, the
-        trajectories on either side of its tip are adjacent on only one or two edges.
+        For each link, the trajectory before, the trajectory after, and the number of segments of either that
+        found the other, a measure of the length they share.
 
     """
     links = []

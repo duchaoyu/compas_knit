@@ -28,7 +28,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libigl polyscope geometry-central)
 
-add_executable(stripes src/main.cpp src/polyline.cpp src/singularities.cpp src/stitches.cpp src/neighbours.cpp)
+add_executable(stripes src/main.cpp src/polyline.cpp src/singularities.cpp src/stitches.cpp src/neighbours.cpp src/remesh.cpp)
 target_link_libraries(stripes Eigen3::Eigen geometry-central polyscope igl::core)
 
 target_compile_options(stripes PRIVATE $<$<CONFIG:RELEASE>:

@@ -21,7 +21,8 @@
 
 The trajectories are the isolines of a stripe pattern aligned with the field, see
 [Stripe patterns and singularities](stripe-patterns.md). They run across the field, and adjacent
-trajectories are placed `2 * stitch_height / stretch` apart, as each is knitted out and back as two courses.
+trajectories are placed `2 * stitch_height / stretch_wale` apart, and divided into stitches `stitch_width / stretch_course`
+apart, as each is knitted out and back as two courses.
 
 ## 3. – 7.
 

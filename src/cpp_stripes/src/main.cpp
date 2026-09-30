@@ -8,15 +8,17 @@
 // usage: stripes <mesh.obj> --spacing <s> --stitch-width <w> [options]
 //
 // outputs, written next to the mesh unless --out-dir is given:
-//   <name>_remesh.obj   the mesh rescaled to --size (unchanged with --size 0), which the trajectories live on
+//   <name>_remesh.obj   the mesh rescaled to --size and refined to --max-edge, which the trajectories live on
+//   <name>_remesh_vertex_directional_field.txt  the field on the vertices of <name>_remesh.obj
 //   <name>_tri_path.txt one polyline per line, "x,y,z; x,y,z; ...", all running the same way, field x normal
 //   <name>_tri_path_recons.txt  the trajectories divided into stitches, one point per stitch
-//   <name>_neighbours.txt  one link per line, "a b n": trajectory b comes after a along the field, adjacent on n mesh edges
+//   <name>_neighbours.txt  one link per line, "a b n": trajectory b comes after a along the field, found n times
 //   <name>_singularities.txt  one singular triangle per line, "stripe|field x y z index", at the triangle centre
 
 #include "polyline.h"
 #include "singularities.h"
 #include "neighbours.h"
+#include "remesh.h"
 #include "stitches.h"
 
 #include <geometrycentral/surface/manifold_surface_mesh.h>
@@ -54,6 +56,8 @@ const char* USAGE = R"(usage: stripes <mesh.obj> --spacing <s> --stitch-width <w
   --field <file>       per-vertex directional field (default <name>_vertex_directional_field.txt)
   --out-dir <dir>      where to write the outputs (default: the mesh directory)
   --face-field <file>  also write the field averaged onto each face, one "x y z" per face
+  --max-edge <e>       split the mesh edges longer than <e>, in units of the rescaled mesh (default: the stitch width);
+                       a trajectory ending at a singularity stops about half an edge from it
   --view               show the field and the trajectories in polyscope
 )";
 
@@ -100,6 +104,7 @@ int main(int argc, char** argv)
   std::string meshPath, fieldPath, outDir, faceFieldPath;
   double spacing = -1;
   double stitchWidth = 0;
+  double maxEdge = 0;
   double size = 1000;
   bool view = false;
 
@@ -126,6 +131,8 @@ int main(int argc, char** argv)
       faceFieldPath = value();
     else if(arg == "--stitch-width")
       stitchWidth = std::stod(value());
+    else if(arg == "--max-edge")
+      maxEdge = std::stod(value());
     else if(arg == "--view")
       view = true;
     else if(arg == "-h" || arg == "--help")
@@ -153,6 +160,7 @@ int main(int argc, char** argv)
   if(fieldPath.empty())
     fieldPath = (mesh_file.parent_path() / (name + "_vertex_directional_field.txt")).string();
   std::string remeshPath = (dir / (name + "_remesh.obj")).string();
+  std::string remeshFieldPath = (dir / (name + "_remesh_vertex_directional_field.txt")).string();
   std::string polylinePath = (dir / (name + "_tri_path.txt")).string();
   std::string stitchPath = (dir / (name + "_tri_path_recons.txt")).string();
   std::string neighbourPath = (dir / (name + "_neighbours.txt")).string();
@@ -172,7 +180,29 @@ int main(int argc, char** argv)
     V *= size / scale_factor;
   std::cout << "The coefficiency is: " << scale_factor << std::endl;
 
+  auto VD = loadMatrixFromFile(fieldPath);
+  if(VD.rows() != V.rows() || VD.cols() < 3)
+  {
+    std::cerr << "The field needs one \"x y z\" row per mesh vertex, " << V.rows() << ", it has " << VD.rows()
+              << " - '" << fieldPath << "'" << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  // refine the mesh: where a trajectory ends at a singularity, the gap left is about half an edge
+  if(maxEdge <= 0)
+    maxEdge = stitchWidth;
+  long nFaces = F.rows();
+  int passes = refine(V, F, VD, maxEdge);
+  std::cout << "Refined the mesh to edges of at most " << maxEdge << ": " << nFaces << " -> " << F.rows()
+            << " triangles, " << passes << " passes" << std::endl;
+
   igl::writeOBJ(remeshPath, V, F);
+  {
+    std::ofstream file(remeshFieldPath);
+    file << std::setprecision(10);
+    for(int i = 0; i < VD.rows(); ++i)
+      file << VD(i, 0) << " " << VD(i, 1) << " " << VD(i, 2) << "\n";
+  }
 
   std::unique_ptr<ManifoldSurfaceMesh> mesh;
   std::unique_ptr<VertexPositionGeometry> geometry;
@@ -189,12 +219,9 @@ int main(int argc, char** argv)
     vBasisY[v] = geometry->vertexTangentBasis[v][1];
   }
 
-  auto VD = loadMatrixFromFile(fieldPath);
-  std::cout << VD.rows() << "," << VD.cols() << std::endl;
-  std::cout << mesh->nVertices() << std::endl;
-  if(VD.rows() != (long)mesh->nVertices() || VD.cols() < 3)
+  if(VD.rows() != (long)mesh->nVertices())
   {
-    std::cerr << "The field needs one \"x y z\" row per mesh vertex - '" << fieldPath << "'" << std::endl;
+    std::cerr << "The refined mesh has " << mesh->nVertices() << " vertices, the field " << VD.rows() << std::endl;
     return EXIT_FAILURE;
   }
 
@@ -297,11 +324,11 @@ int main(int argc, char** argv)
   std::cout << "Wrote " << nStitches << " stitches to " << stitchPath << std::endl;
 
   // which trajectory comes after which along the field
-  auto links = findNeighbours(*geometry, stripeValues, stripeIndices, polylines, field);
+  auto links = findNeighbours(polylines, positions, normals, field, spacing);
   {
     std::ofstream file(neighbourPath);
     for(const Link& link: links)
-      file << link.prev << " " << link.next << " " << link.edges << "\n";
+      file << link.prev << " " << link.next << " " << link.hits << "\n";
   }
   std::cout << "Wrote " << links.size() << " links between neighbouring trajectories to " << neighbourPath << std::endl;
 

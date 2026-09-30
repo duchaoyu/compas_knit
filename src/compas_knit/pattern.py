@@ -16,7 +16,18 @@ from scipy.spatial import cKDTree
 from compas_knit.stripes import order_trajectories
 
 
-__all__ = ["knitting_sequence", "course_directions", "stitch_columns", "read_features", "knitting_pattern", "write_pattern"]
+__all__ = [
+    "knitting_sequence",
+    "course_directions",
+    "stitch_columns",
+    "boundary_polylines",
+    "sample_polyline",
+    "read_feature",
+    "write_feature",
+    "knitting_pattern",
+    "knittable",
+    "write_pattern",
+]
 
 
 OUT = (0, 0, 0)  # the row knitting out, along the trajectory
@@ -240,25 +251,131 @@ def stitch_columns(stitches, links, sequence=None, across=None, alignment=None, 
     return start, offsets
 
 
-def read_features(path):
-    """Read a feature file, as written by the Grasshopper definition: one ``x,y,z; r,g,b`` per line.
+def boundary_polylines(mesh, corner=60.0):
+    """The boundary of a mesh, split into polylines at its corners.
+
+    Parameters
+    ----------
+    mesh : str | :class:`compas.datastructures.Mesh`
+        The mesh, or the path to an ``.obj``.
+    corner : float, optional
+        A boundary vertex where the boundary turns by more than this, in degrees, is a corner.
 
     Returns
     -------
-    list[tuple[list[float], tuple[int, int, int]]]
-        The points and their colours.
+    list[np.ndarray]
+        The points of each piece of the boundary between two corners, or of a whole boundary loop without corners.
 
     """
-    features = []
+    from compas_knit.stripes import _mesh_arrays
+
+    xyz, faces = _mesh_arrays(mesh)
+    count = {}
+    for f in faces:
+        for k in range(3):
+            a, b = int(f[k]), int(f[(k + 1) % 3])
+            key = (min(a, b), max(a, b))
+            count[key] = count.get(key, 0) + 1
+    # the boundary edges, in the direction of their face, so that they chain head to tail
+    following = {}
+    for f in faces:
+        for k in range(3):
+            a, b = int(f[k]), int(f[(k + 1) % 3])
+            if count[(min(a, b), max(a, b))] == 1:
+                following[a] = b
+    pieces = []
+    seen = set()
+    for start in following:
+        if start in seen:
+            continue
+        loop = [start]
+        seen.add(start)
+        while following[loop[-1]] != start:
+            loop.append(following[loop[-1]])
+            seen.add(loop[-1])
+        p = xyz[loop]
+        before = p - np.roll(p, 1, axis=0)
+        after = np.roll(p, -1, axis=0) - p
+        cos = (before * after).sum(1) / np.maximum(np.linalg.norm(before, axis=1) * np.linalg.norm(after, axis=1), 1e-12)
+        corners = np.nonzero(cos < np.cos(np.radians(corner)))[0]
+        if len(corners) == 0:
+            pieces.append(np.vstack([p, p[:1]]))
+            continue
+        for i, c in enumerate(corners):
+            d = corners[(i + 1) % len(corners)]
+            idx = np.arange(c, d + 1) if d > c else np.concatenate([np.arange(c, len(p)), np.arange(0, d + 1)])
+            pieces.append(p[idx])
+    return pieces
+
+
+def sample_polyline(points, step):
+    """Points along a polyline, ``step`` apart along it, from its start to its end."""
+    points = np.asarray(points, dtype=float)
+    lengths = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    along = np.concatenate([[0], np.cumsum(lengths)])
+    at = np.linspace(0, along[-1], max(int(np.ceil(along[-1] / step)), 1) + 1)
+    return np.array([np.interp(at, along, points[:, k]) for k in range(3)]).T
+
+
+def read_feature(path):
+    """Read a feature: points and lines, from an ``.obj`` as Rhino exports it, or points from a ``.txt``.
+
+    In an ``.obj``, the points are the vertices of the ``p`` records and the lines the polylines of the ``l`` records;
+    a file with neither is read as points, all its vertices. A ``.txt`` is a feature file as the Grasshopper definition
+    writes it, one ``x,y,z; r,g,b`` per line, read as points.
+
+    Returns
+    -------
+    dict
+        ``points``: an (n, 3) array, ``lines``: a list of (m, 3) arrays.
+
+    """
+    if path.endswith(".txt"):
+        points = []
+        with open(path, "r") as f:
+            for line in f:
+                if line.strip():
+                    points.append([float(c) for c in line.split(";")[0].split(",")])
+        return {"points": np.array(points).reshape(-1, 3), "lines": []}
+
+    vertices, points, lines = [], [], []
+
+    def index(token):
+        i = int(token.split("/")[0])
+        return i - 1 if i > 0 else len(vertices) + i
+
     with open(path, "r") as f:
         for line in f:
-            if line.strip():
-                point, color = line.strip().split(";")
-                features.append(([float(c) for c in point.split(",")], tuple(int(c) for c in color.split(","))))
-    return features
+            parts = line.split()
+            if not parts:
+                continue
+            if parts[0] == "v":
+                vertices.append([float(c) for c in parts[1:4]])
+            elif parts[0] == "p":
+                points += [index(t) for t in parts[1:]]
+            elif parts[0] == "l":
+                lines.append([index(t) for t in parts[1:]])
+    vertices = np.array(vertices).reshape(-1, 3)
+    if not points and not lines:
+        return {"points": vertices, "lines": []}
+    return {"points": vertices[points].reshape(-1, 3), "lines": [vertices[line] for line in lines if len(line) > 1]}
 
 
-def knitting_pattern(stitches, links, mesh=None, field=None, alignment=None):
+def write_feature(path, points=(), lines=()):
+    """Write a feature as an ``.obj``: the points as ``p`` records, the lines as ``l`` records, see :func:`read_feature`."""
+    with open(path, "w") as f:
+        n = 0
+        for p in points:
+            f.write("v {} {} {}\np {}\n".format(p[0], p[1], p[2], n + 1))
+            n += 1
+        for line in lines:
+            for p in line:
+                f.write("v {} {} {}\n".format(p[0], p[1], p[2]))
+            f.write("l {}\n".format(" ".join(str(n + 1 + k) for k in range(len(line)))))
+            n += len(line)
+
+
+def knitting_pattern(stitches, links, mesh=None, field=None, alignment=None, features=None, reach=1.5):
     """The bitmap of the knitting pattern, one pixel per stitch, two rows per trajectory.
 
     The stitches are placed in the column of the stitch they sit on, following the wale when the mesh and its field
@@ -275,10 +392,16 @@ def knitting_pattern(stitches, links, mesh=None, field=None, alignment=None):
         The mesh of the field, or the path to its ``.obj``.
     field : str | array-like, optional
         The directional field per vertex, or the path to its file.
-    alignment : list[tuple[list[float], tuple[int, int, int]]], optional
-        Points to align the stitches at, with their colours, as returned by :func:`read_features`. Each point takes
-        the stitch nearest to it, within one stitch width; these stitches are held in one column and keep the colour
-        of their point in the pattern.
+    alignment : dict | list[list[float]], optional
+        A feature, see :func:`read_feature`, or points, whose stitches are held in one column: of a line, in each course
+        it passes, the stitch closest to it.
+    features : list[tuple[dict, tuple[int, int, int]]], optional
+        Stitches to colour, as (feature, colour): each point of a feature takes the stitch nearest to it, and each line
+        every stitch it passes over, within ``reach``. The stitches take the colour in both rows of their trajectory;
+        where features share a stitch, the later one wins.
+    reach : float, optional
+        How far a feature reaches for its stitches, in stitch widths. On the boundary, the nearest stitch is the end of
+        a course, up to one stitch short of the boundary and half a course spacing to the side.
 
     Raises
     ------
@@ -292,7 +415,8 @@ def knitting_pattern(stitches, links, mesh=None, field=None, alignment=None):
         the row knitting back red at y + 1, the stitches running towards lower x, as the pixel data of the
         earlier scripts. ``sequence``: the trajectories in knitting order, ``rows[i]``: the first row of
         trajectory i, ``offsets[i]``: the column offset of each of its stitches from the stitch below it,
-        ``aligned``: the aligned stitches, as (trajectory, stitch index), ``breaks``: the number of cycles broken.
+        ``aligned``: the aligned stitches, as (trajectory, stitch index), ``colored``: the coloured stitches of each
+        feature, ``breaks``: the number of cycles broken.
 
     """
     stitches = [[list(p) for p in (s.points if hasattr(s, "points") else s)] for s in stitches]
@@ -309,18 +433,47 @@ def knitting_pattern(stitches, links, mesh=None, field=None, alignment=None):
         print("warning: the links close on themselves in {} places; the sequence breaks them there, "
               "which is where the knitting needs a seam".format(breaks))
 
-    # the stitches at the alignment points
-    aligned, colors = [], {}
-    if alignment:
-        owner = np.concatenate([np.full(len(s), i) for i, s in enumerate(stitches)])
-        index = np.concatenate([np.arange(len(s)) for s in stitches])
-        d, nearest = cKDTree(np.vstack(stitches)).query([p for p, _ in alignment])
-        for (point, color), dist, k in zip(alignment, d, nearest):
-            if dist <= width:
-                aligned.append((int(owner[k]), int(index[k])))
-                colors[aligned[-1]] = color
-        if len(aligned) < len(alignment):
-            print("warning: {} alignment points are farther than a stitch from any stitch".format(len(alignment) - len(aligned)))
+    # the stitches of the features: nearest to each point, and to the samples of each line, finer than a stitch
+    owner = np.concatenate([np.full(len(s), i) for i, s in enumerate(stitches)])
+    index = np.concatenate([np.arange(len(s)) for s in stitches])
+    tree = cKDTree(np.vstack(stitches))
+
+    def feature_stitches(feature, what):
+        if not isinstance(feature, dict):
+            feature = {"points": np.asarray(feature, dtype=float).reshape(-1, 3), "lines": []}
+        found = {}
+        groups = [("point", feature["points"])] if len(feature["points"]) else []
+        groups += [("line", sample_polyline(line, width / 4)) for line in feature["lines"]]
+        points_out, lines_out = 0, 0
+        for kind, points in groups:
+            d, nearest = tree.query(np.asarray(points, dtype=float)[:, :3])
+            on = d <= reach * width
+            for dist, k in zip(d[on], nearest[on]):
+                stitch = (int(owner[k]), int(index[k]))
+                found[stitch] = min(dist, found.get(stitch, np.inf))
+            if kind == "point":
+                points_out += int((~on).sum())
+            elif not on.any():
+                lines_out += 1
+        if points_out:
+            print("warning: {} points of {} are out of reach of any stitch".format(points_out, what))
+        if lines_out:
+            print("warning: {} lines of {} are out of reach of any stitch".format(lines_out, what))
+        return found
+
+    aligned = []
+    if alignment is not None:
+        # of a line, one stitch in each course, the closest
+        closest = {}
+        for (i, k), dist in feature_stitches(alignment, "the alignment").items():
+            if dist < closest.get(i, (np.inf, None))[0]:
+                closest[i] = (dist, k)
+        aligned = sorted((i, k) for i, (_, k) in closest.items())
+    colors, colored = {}, []
+    for n, (feature, color) in enumerate(features or []):
+        colored.append(sorted(feature_stitches(feature, "feature {}".format(n))))
+        for stitch in colored[-1]:
+            colors[stitch] = tuple(color)
 
     across = course_directions(mesh, field) if mesh is not None and field is not None else None
     start, offsets = stitch_columns(stitches, links, sequence, across, aligned)
@@ -335,7 +488,106 @@ def knitting_pattern(stitches, links, mesh=None, field=None, alignment=None):
             color = colors.get((i, k))
             pixels[(x, y)] = color or OUT
             pixels[(x, y + 1)] = color or BACK
-    return {"pixels": pixels, "sequence": sequence, "rows": rows, "offsets": offsets, "aligned": aligned, "breaks": breaks}
+    return {
+        "pixels": pixels,
+        "sequence": sequence,
+        "rows": rows,
+        "offsets": offsets,
+        "aligned": aligned,
+        "colored": colored,
+        "breaks": breaks,
+    }
+
+
+ADDED = (0, 0, 200)  # the stitches added at the boundary to carry the yarn, as the earlier post-processing coloured them
+
+
+def knittable(pixels, gap=3, reach=50, added=ADDED):
+    """Make the pattern knittable from one yarn carrier, row after row from the bottom right corner (Section 6.2.4).
+
+    In the bitmap the first row is at the bottom. The carrier knits a black row from right to left, the red row above it
+    back from left to right, then the next black row from right to left, and so on. So a black row and its red row
+    turn at their left end, and consecutive trajectories meet at the right end:
+
+    * where the next black row starts further right than the red row ended, the red row is continued to it, if there
+      are no stitches beneath: the addition is at the boundary, so it hardly changes the geometry;
+    * where it starts more than ``gap`` needles further left, the black stitches above those needles are moved down
+      into it, from the nearest black row above, keeping every column in order; where there is nothing above, it is at
+      the boundary, and stitches are added.
+
+    The added stitches take the colour ``added``.
+
+    Parameters
+    ----------
+    pixels : dict
+        ``{(x, y): (r, g, b)}``, see :func:`knitting_pattern`: black rows at even y, red rows at odd y, from y = 0 at the
+        bottom of the bitmap, x growing to the right.
+    gap : int, optional
+        A black row starting this many needles or fewer from where the yarn is is left as it is.
+    reach : int, optional
+        How many rows up the black rows are searched.
+    added : tuple[int, int, int], optional
+        The colour of the stitches added at the boundary.
+
+    Returns
+    -------
+    tuple[dict, dict]
+        The pixels, and a report: ``moved`` stitches, stitches ``added``, and the transitions left open: red rows that
+        could not be continued because of stitches beneath, ``red_open``, black rows that could not be connected,
+        ``black_open``, and red rows not starting where their black row ended, ``turn_open``.
+
+    """
+    rows = {}
+    for (x, y), color in pixels.items():
+        rows.setdefault(y, {})[x] = color
+    top = max(rows)
+    report = {"moved": 0, "added": 0, "red_open": 0, "black_open": 0, "turn_open": 0}
+
+    for y in range(1, top + 1):
+        if not rows.get(y) or not rows.get(y - 1):
+            continue
+        if y % 2:
+            # a red row: it goes back from where its black row ended, on the left
+            if min(rows[y]) != min(rows[y - 1]):
+                report["turn_open"] += 1
+            continue
+
+        end, start = max(rows[y - 1]), max(rows[y])  # the red row ends at its right, the black row starts at its right
+        if start - end > gap:
+            # continue the red row to the start, if there is nothing beneath
+            needles = range(end + 1, start + 1)
+            if any(x in rows.get(q, {}) for q in range(y - 1) for x in needles):
+                report["red_open"] += 1
+            else:
+                for x in needles:
+                    rows[y - 1][x] = added
+                    report["added"] += 1
+        elif end - start > gap:
+            # move down the black stitches above those needles, or add stitches where there are none
+            x = start + 1
+            while x <= end:
+                above = next((q for q in range(y + 2, min(y + reach, top + 1), 2) if x in rows.get(q, {})), None)
+                if above is None:
+                    if any(x in rows.get(q, {}) for q in range(y + 1, top + 1)):
+                        report["black_open"] += 1  # stitches above, but no black one within reach
+                        break
+                    for c in range(x, end + 1):  # nothing above: the boundary
+                        rows[y][c] = added
+                        report["added"] += 1
+                    break
+                run = [c for c in sorted(rows[above]) if c >= x]
+                # moved down, a stitch passes the rows in between: none of them may have a stitch in its column, and the
+                # row it leaves has to stay in one piece, so its part beyond where the yarn is cannot be left behind
+                if run[-1] > end or any(c in rows.get(q, {}) for q in range(y + 1, above) for c in run):
+                    report["black_open"] += 1
+                    break
+                for c in run:
+                    rows[y][c] = rows[above].pop(c)
+                    report["moved"] += 1
+                x = run[-1] + 1
+
+    out = {(x, y): c for y, row in rows.items() for x, c in row.items()}
+    return out, report
 
 
 def write_pattern(pixels, bitmap_path, pickle_path=None, bed_width=None):

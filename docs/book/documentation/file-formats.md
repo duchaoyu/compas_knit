@@ -35,9 +35,9 @@ stitch is dropped, and trajectories shorter than one stitch are left out.
 
 ## Neighbours — `<name>_neighbours.txt`
 
-One link per line, `a b n`: trajectory `b` comes after trajectory `a` along the field, and they are adjacent on `n`
-mesh edges. Indices are the line numbers, from 0, in `_tri_path.txt` and `_tri_path_recons.txt`.
-Two trajectories are neighbours where they cross a mesh edge next to each other; the links form no cycles.
+One link per line, `a b n`: trajectory `b` comes after trajectory `a` along the field, found `n` times. Indices are the line numbers, from 0, in `_tri_path.txt` and `_tri_path_recons.txt`.
+From the middle of each segment, the line along the field is followed both ways to the first trajectory it crosses
+within 1.5 spacings: the one ahead comes after, the one behind before. This does not depend on the mesh resolution.
 
 ```
 0 121 40
@@ -61,9 +61,11 @@ One pixel per stitch, two rows per trajectory: the row knitting out black, the r
 flipped top to bottom for the machine software; the pickle holds `{(x, y): (r, g, b)}` unflipped, from (0, 0), for
 `3_pixel_data_postprocess.py`.
 
-## Rescaled mesh — `<name>_remesh.obj`
+## Refined mesh — `<name>_remesh.obj`, `<name>_remesh_vertex_directional_field.txt`
 
-The mesh the trajectories live on, written by `stripes`. Unchanged from the input with `--size 0`.
+The mesh the trajectories live on, written by `stripes`: rescaled to `--size` (unchanged with `--size 0`) and refined
+until no edge is longer than `--max-edge`, by default the stitch width, with the field on its vertices. The refinement
+splits edges at their midpoints, so the surface and the original vertices stay as they were.
 
 ## Face field — `--face-field <file>`
 

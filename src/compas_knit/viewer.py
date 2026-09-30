@@ -84,9 +84,12 @@ def view_stripes(
 
     # lift the trajectories a little off the surface, along the normal at the nearest vertex,
     # so the faces do not draw over them and tint their colours
-    xyz = np.array(mesh.vertices_attributes("xyz"))
-    normals = np.array([mesh.vertex_normal(vertex) for vertex in mesh.vertices()])
-    lift = 0.02 * np.mean([mesh.edge_length(edge) for edge in mesh.edges()])
+    from compas_knit.stripes import _mesh_arrays
+    from compas_knit.stripes import _vertex_normals
+
+    xyz, faces = _mesh_arrays(mesh)
+    normals = _vertex_normals(xyz, faces)
+    lift = 0.02 * np.mean(np.linalg.norm(xyz[faces] - xyz[np.roll(faces, 1, axis=1)], axis=2))
     tree = cKDTree(xyz)
 
     group = viewer.scene.add_group(name="trajectories")

@@ -21,7 +21,7 @@ CMake downloads libigl, polyscope and geometry-central at the same revisions as 
 ## Run
 
 From Python, `compas_knit.stripes.generate_stripes(mesh, field, stitch_height, stitch_width)` calls this with
-`--size 0 --spacing 2*stitch_height --stitch-width stitch_width`, see `scripts/knit.py`.
+`--size 0 --spacing 2*stitch_height --stitch-width stitch_width`, see `scripts/trajectories.py`.
 
 
 ```
@@ -34,17 +34,19 @@ Inputs, in `<folder>`:
   (or pass another file with `--field`)
 
 Outputs, in `<folder>` (or `--out-dir`):
-- `<name>_remesh.obj`, the mesh rescaled so its largest extent is `--size` (`--size 0` keeps the mesh units)
+- `<name>_remesh.obj`, the mesh rescaled so its largest extent is `--size` (`--size 0` keeps the mesh units) and refined
+  until no edge is longer than `--max-edge` (default: the stitch width), and its field,
+  `<name>_remesh_vertex_directional_field.txt`
 - `<name>_tri_path.txt`, one trajectory per line, `x,y,z; x,y,z; ...`, all running the same way along field × normal
 - `<name>_tri_path_recons.txt`, the trajectories divided into stitches of width `<w>`,
   one point per stitch, as Grasshopper's DivideDistance
 - `<name>_neighbours.txt`, one link per line, `a b n`: trajectory `b` comes after `a` along the field,
-  adjacent on `n` mesh edges
+  found `n` times
 - `<name>_singularities.txt`, one singular triangle per line, `stripe|field x y z index`, at its centre
 - with `--face-field <file>`, the field averaged onto each face, one `x y z` per face
 
 `--spacing` is in the units of the rescaled mesh, and is the course spacing 2·st_h
-(divided by the stretch factor where the knit is pre-strained). Values used before:
+(divided by the wale stretch factor where the knit is pre-strained; `--stitch-width` by the course one). Values used before:
 
 | model | command |
 |---|---|

@@ -9,7 +9,7 @@ The scripts write their outputs to an `out/` folder next to the inputs, which gi
 
 ## 2part_remesh2
 
-Copied from `PhD/knit/2024_prototypes/2part/anisotropic`, unchanged. Millimetres; `scripts/knit.py` uses
+Copied from `PhD/knit/2024_prototypes/2part/anisotropic`, unchanged. Millimetres; `scripts/trajectories.py` uses
 stitch height 2.297 and stitch width 3.54.
 
 ## fabsim

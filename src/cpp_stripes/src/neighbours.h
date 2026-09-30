@@ -1,26 +1,26 @@
 #pragma once
 
-#include <geometrycentral/surface/vertex_position_geometry.h>
+#include <geometrycentral/utilities/vector3.h>
 
 #include <array>
 #include <vector>
 
 // A link between two neighbouring trajectories: `next` lies after `prev` along the field.
-// `edges` is the number of mesh edges on which they are adjacent, a measure of the length they share.
+// `hits` is the number of segments of either that see the other as their neighbour, a measure of the length they share.
 struct Link
 {
   size_t prev;
   size_t next;
-  size_t edges;
+  size_t hits;
 };
 
-// Find the neighbouring trajectories. Along a mesh edge, the isolines cross in stripe order, so two trajectories
-// with consecutive crossings on an edge are neighbours, and the one further along the field comes next.
+// Find the neighbouring trajectories. From the middle of each segment, the line along the field is followed both ways,
+// in the tangent plane, to the first trajectory it crosses within 1.5 spacings: the one ahead along the field comes
+// next, the one behind before. This does not depend on the mesh, however fine or coarse.
 //
-// polylines are the trajectories as extracted, their points on the mesh edges; vertexField is the field per vertex,
-// with consistent signs. Where two trajectories are found in both orders, the order found on more edges is kept.
-std::vector<Link> findNeighbours(geometrycentral::surface::VertexPositionGeometry& geometry,
-                                 const geometrycentral::surface::CornerData<double>& stripeValues,
-                                 const geometrycentral::surface::FaceData<int>& stripeIndices,
-                                 const std::vector<std::vector<geometrycentral::Vector3>>& polylines,
-                                 const std::vector<geometrycentral::Vector3>& vertexField);
+// positions, normals and field are per mesh vertex; the field has to have consistent signs. Where two trajectories are
+// found in both orders, the order found more often is kept.
+std::vector<Link> findNeighbours(const std::vector<std::vector<geometrycentral::Vector3>>& polylines,
+                                 const std::vector<geometrycentral::Vector3>& positions,
+                                 const std::vector<geometrycentral::Vector3>& normals,
+                                 const std::vector<geometrycentral::Vector3>& field, double spacing);

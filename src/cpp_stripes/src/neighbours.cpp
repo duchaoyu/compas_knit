@@ -1,126 +1,130 @@
 #include "neighbours.h"
 
-#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <unordered_map>
 
-using namespace geometrycentral;
-using namespace geometrycentral::surface;
+using geometrycentral::Vector3;
 
 namespace
 {
-// finds which trajectory a point belongs to, by position
-class PointLocator
+using Key = std::array<long, 3>;
+struct Hash
+{
+  size_t operator()(const Key& k) const { return (k[0] * 73856093) ^ (k[1] * 19349663) ^ (k[2] * 83492791); }
+};
+
+// items at points, found by position, in cells of a given size
+template <typename T>
+class Grid
 {
 public:
-  PointLocator(double tol) : tol(tol), cell(100 * tol) {}
-
-  void add(const Vector3& p, size_t id) { cells[key(p)].push_back({p, id}); }
-
-  // the trajectory of the point within tol of p, or -1
-  long find(const Vector3& p) const
+  Grid(double cell) : cell(cell) {}
+  void add(const Vector3& p, const T& item) { cells[key(p)].push_back(item); }
+  template <typename F>
+  void around(const Vector3& p, int reach, F visit) const
   {
-    auto [i, j, k] = key(p);
-    for(long di = -1; di <= 1; ++di)
-      for(long dj = -1; dj <= 1; ++dj)
-        for(long dk = -1; dk <= 1; ++dk)
+    Key k = key(p);
+    for(long i = -reach; i <= reach; ++i)
+      for(long j = -reach; j <= reach; ++j)
+        for(long l = -reach; l <= reach; ++l)
         {
-          auto it = cells.find({i + di, j + dj, k + dk});
-          if(it == cells.end())
-            continue;
-          for(const auto& [q, id]: it->second)
-            if(norm(q - p) < tol)
-              return id;
+          auto it = cells.find({k[0] + i, k[1] + j, k[2] + l});
+          if(it != cells.end())
+            for(const T& item: it->second)
+              visit(item);
         }
-    return -1;
   }
 
 private:
-  using Key = std::array<long, 3>;
-  struct Hash
-  {
-    size_t operator()(const Key& k) const { return (k[0] * 73856093) ^ (k[1] * 19349663) ^ (k[2] * 83492791); }
-  };
   Key key(const Vector3& p) const
   {
     return {(long)std::floor(p.x / cell), (long)std::floor(p.y / cell), (long)std::floor(p.z / cell)};
   }
-
-  double tol, cell;
-  std::unordered_map<Key, std::vector<std::pair<Vector3, size_t>>, Hash> cells;
+  double cell;
+  std::unordered_map<Key, std::vector<T>, Hash> cells;
 };
 } // namespace
 
-std::vector<Link> findNeighbours(VertexPositionGeometry& geometry, const CornerData<double>& stripeValues,
-                                 const FaceData<int>& stripeIndices, const std::vector<std::vector<Vector3>>& polylines,
-                                 const std::vector<Vector3>& vertexField)
+std::vector<Link> findNeighbours(const std::vector<std::vector<Vector3>>& polylines,
+                                 const std::vector<Vector3>& positions, const std::vector<Vector3>& normals,
+                                 const std::vector<Vector3>& field, double spacing)
 {
-  SurfaceMesh& mesh = geometry.mesh;
-  geometry.requireEdgeLengths();
-  double meanEdge = 0;
-  for(Edge e: mesh.edges())
-    meanEdge += geometry.edgeLengths[e];
-  meanEdge /= mesh.nEdges();
+  // the nearest vertex, for the normal and the field at a point
+  double meanStep = 0;
+  size_t nSteps = 0;
+  for(const auto& p: polylines)
+    for(size_t i = 0; i + 1 < p.size(); ++i, ++nSteps)
+      meanStep += norm(p[i + 1] - p[i]);
+  meanStep /= std::max<size_t>(nSteps, 1);
+  Grid<size_t> vertices(spacing);
+  for(size_t v = 0; v < positions.size(); ++v)
+    vertices.add(positions[v], v);
+  auto nearestVertex = [&](const Vector3& p) {
+    size_t best = 0;
+    double d = std::numeric_limits<double>::max();
+    for(int reach = 1; reach < 64 && d == std::numeric_limits<double>::max(); reach *= 2)
+      vertices.around(p, reach, [&](size_t v) {
+        double dv = norm2(positions[v] - p);
+        if(dv < d)
+          d = dv, best = v;
+      });
+    return best;
+  };
 
-  PointLocator locator(1e-6 * meanEdge);
-  for(size_t i = 0; i < polylines.size(); ++i)
-    for(const Vector3& p: polylines[i])
-      locator.add(p, i);
-
-  // the trajectories crossing each edge, with the position of the crossing along the edge
-  EdgeData<std::vector<std::pair<double, size_t>>> crossings(mesh);
-  for(Face f: mesh.faces())
-    for(Halfedge he: f.adjacentHalfedges())
-    {
-      // the same stripe values as the extraction, with the seam of a singular triangle on its last edge
-      double a = stripeValues[he.corner()];
-      double b = stripeValues[he.next().corner()] + (he.next() == f.halfedge() ? 2 * PI * stripeIndices[f] : 0);
-      double lo = std::min(a, b), hi = std::max(a, b);
-      Vector3 tail = geometry.vertexPositions[he.tailVertex()];
-      Vector3 tip = geometry.vertexPositions[he.tipVertex()];
-      Edge e = he.edge();
-      Vector3 origin = geometry.vertexPositions[e.halfedge().tailVertex()];
-      Vector3 axis = geometry.vertexPositions[e.halfedge().tipVertex()] - origin;
-      for(int m = std::ceil(lo / (2 * PI)); 2 * PI * m < hi; ++m)
-      {
-        double t = (2 * PI * m - a) / (b - a);
-        Vector3 p = tail + t * (tip - tail);
-        long id = locator.find(p);
-        if(id < 0)
-          continue;
-        double s = dot(p - origin, axis) / dot(axis, axis);
-        auto& list = crossings[e];
-        bool seen = false;
-        for(const auto& [s2, id2]: list)
-          seen = seen || (id2 == (size_t)id && std::abs(s2 - s) < 1e-9);
-        if(!seen)
-          list.push_back({s, (size_t)id});
-      }
-    }
-
-  // consecutive crossings on an edge: the one further along the field comes next
-  std::map<std::pair<size_t, size_t>, size_t> votes;
-  for(Edge e: mesh.edges())
+  // the segments of all trajectories, by their middle
+  struct Segment
   {
-    auto& list = crossings[e];
-    std::sort(list.begin(), list.end());
-    Vertex v0 = e.halfedge().tailVertex(), v1 = e.halfedge().tipVertex();
-    Vector3 field = vertexField[v0.getIndex()] + vertexField[v1.getIndex()];
-    Vector3 axis = geometry.vertexPositions[v1] - geometry.vertexPositions[v0];
-    // along the edge, s grows towards v1: the later crossing is further along the field if the edge points with it
-    bool forward = dot(axis, field) > 0;
-    for(size_t k = 0; k + 1 < list.size(); ++k)
+    size_t trajectory, index;
+  };
+  Grid<Segment> segments(spacing);
+  for(size_t t = 0; t < polylines.size(); ++t)
+    for(size_t i = 0; i + 1 < polylines[t].size(); ++i)
+      segments.add((polylines[t][i] + polylines[t][i + 1]) / 2, {t, i});
+  // segments longer than a spacing reach further than their middle: widen the search
+  int reach = 1 + (int)std::ceil(2 * meanStep / spacing);
+
+  std::map<std::pair<size_t, size_t>, size_t> votes;
+  for(size_t t = 0; t < polylines.size(); ++t)
+    for(size_t i = 0; i + 1 < polylines[t].size(); ++i)
     {
-      size_t first = list[k].second, second = list[k + 1].second;
-      if(first == second)
+      Vector3 p = (polylines[t][i] + polylines[t][i + 1]) / 2;
+      size_t v = nearestVertex(p);
+      Vector3 n = normals[v];
+      Vector3 f = field[v] - dot(field[v], n) * n;
+      if(norm(f) == 0)
         continue;
-      if(forward)
-        ++votes[{first, second}];
-      else
-        ++votes[{second, first}];
+      f = normalize(f);
+      Vector3 c = cross(n, f); // across the field, in the tangent plane
+
+      // the first trajectory crossed ahead along the field, and behind
+      double ahead = 1.5 * spacing, behind = -1.5 * spacing;
+      long next = -1, prev = -1;
+      segments.around(p, reach, [&](const Segment& s) {
+        if(s.trajectory == t)
+          return;
+        const Vector3& q0 = polylines[s.trajectory][s.index];
+        const Vector3& q1 = polylines[s.trajectory][s.index + 1];
+        double u0 = dot(q0 - p, c), u1 = dot(q1 - p, c);
+        if(u0 * u1 > 0 || u0 == u1)
+          return;
+        double w = u0 / (u0 - u1);
+        Vector3 q = q0 + w * (q1 - q0);
+        // off the tangent plane by less than the distance along the field: the same sheet of the surface
+        double along = dot(q - p, f);
+        if(std::abs(dot(q - p, n)) > std::abs(along))
+          return;
+        if(along > 0 && along < ahead)
+          ahead = along, next = s.trajectory;
+        if(along < 0 && along > behind)
+          behind = along, prev = s.trajectory;
+      });
+      if(next >= 0)
+        ++votes[{t, (size_t)next}];
+      if(prev >= 0)
+        ++votes[{(size_t)prev, t}];
     }
-  }
 
   std::vector<Link> links;
   for(const auto& [pair, n]: votes)

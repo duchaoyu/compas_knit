@@ -4,7 +4,7 @@
 stripes <mesh.obj> --spacing <s> --stitch-width <w> [options]
 ```
 
-Called by [`generate_stripes`](stripes.md#generate_stripes) with `--size 0 --spacing 2*stitch_height/stretch --stitch-width stitch_width`.
+Called by [`generate_stripes`](stripes.md#generate_stripes) with `--size 0 --spacing 2*stitch_height/stretch_wale --stitch-width stitch_width/stretch_course`.
 Source in `src/cpp_stripes`, build instructions in [Installation](../getting-started/installation.md).
 
 | Option | Description |
@@ -15,9 +15,10 @@ Source in `src/cpp_stripes`, build instructions in [Installation](../getting-sta
 | `--field <file>` | per-vertex directional field (default `<name>_vertex_directional_field.txt`) |
 | `--out-dir <dir>` | where to write the outputs (default: the mesh directory) |
 | `--face-field <file>` | also write the field averaged onto each face |
+| `--max-edge <e>` | refine the mesh until no edge is longer than `<e>` (default: the stitch width); a trajectory ending at a singularity stops about half an edge from it, so this sets the gap left in the knit there |
 | `--view` | show the field and the trajectories in polyscope |
 
-**Writes** `<name>_remesh.obj`, `<name>_tri_path.txt`, `<name>_tri_path_recons.txt`, `<name>_neighbours.txt` and `<name>_singularities.txt`, see [File formats](../documentation/file-formats.md).
+**Writes** `<name>_remesh.obj`, `<name>_tri_path.txt`, `<name>_remesh_vertex_directional_field.txt`, `<name>_tri_path_recons.txt`, `<name>_neighbours.txt` and `<name>_singularities.txt`, see [File formats](../documentation/file-formats.md).
 
 All trajectories run the same way across the field, along field × normal. The field needs consistent signs for this;
 negate it to run them the other way.
@@ -32,4 +33,5 @@ negate it to run them the other way.
 | `src/singularities.cpp` | links the isolines through singular triangles, see [Stripe patterns and singularities](../documentation/stripe-patterns.md#singularities) |
 | `src/polyline.cpp` | chains the isoline segments into polylines |
 | `src/stitches.cpp` | orients the trajectories along the field, divides them into stitches |
-| `src/neighbours.cpp` | finds which trajectory comes after which |
+| `src/remesh.cpp` | refines the mesh, splitting the edges longer than `--max-edge` |
+| `src/neighbours.cpp` | finds which trajectory comes after which, along the field |

@@ -9,7 +9,8 @@ from compas_knit.stripes import generate_stripes, check_trajectories, read_traje
 ## generate\_stripes
 
 ```python
-generate_stripes(mesh_path, field_path, stitch_height, stitch_width, stretch=1.0, out_dir=None, view=False, check=True)
+generate_stripes(mesh_path, field_path, stitch_height, stitch_width, stretch_wale=1.0, stretch_course=1.0,
+                 max_edge=None, out_dir=None, view=False, check=True)
 ```
 
 Extract equally spaced knitting trajectories from a directional field, by running the [`stripes`](cpp-stripes.md) executable.
@@ -20,7 +21,9 @@ Extract equally spaced knitting trajectories from a directional field, by runnin
 | `field_path` | `str` | per-vertex directional field, see [File formats](../documentation/file-formats.md) |
 | `stitch_height` | `float` | stitch height st\_h at theoretical zero stress, in the units of the mesh |
 | `stitch_width` | `float` | stitch width st\_w, in the units of the mesh; the trajectories are divided into stitches of this width, one point per stitch, written to `<name>_tri_path_recons.txt` |
-| `stretch` | `float` | pre-strain stretch factor along the wale; the spacing is divided by it (Section 6.3.3) |
+| `stretch_wale` | `float` | pre-strain stretch factor along the wale, the direction of the field; the stitch height, and so the spacing, is divided by it (Section 6.3.3) |
+| `stretch_course` | `float` | pre-strain stretch factor along the course, across the field; the stitch width is divided by it |
+| `max_edge` | `float` | refine the mesh until no edge is longer, by default the stitch width on the mesh, `stitch_width / stretch_course`; a trajectory ending at a singularity stops about half an edge from it, so this sets the gap in the knit there |
 | `out_dir` | `str` | where to write `<name>_remesh.obj` and `<name>_tri_path.txt`; defaults to the mesh directory |
 | `view` | `bool` | show the field and the trajectories in polyscope; blocks until the window is closed |
 | `check` | `bool` | warn about segments running along the field, see [`check_trajectories`](#check_trajectories) |
@@ -84,9 +87,8 @@ read_neighbours(path)
 ```
 
 Read a `_neighbours.txt` file: which trajectory comes after which along the field.
-**Returns** `list[tuple[int, int, int]]` — for each link, the trajectory before, the trajectory after, and the number
-of mesh edges on which they are adjacent. Next to the end of a short row, the trajectories on either side of its tip
-are adjacent on only one or two edges.
+**Returns** `list[tuple[int, int, int]]` — for each link, the trajectory before, the trajectory after, and how many
+segments of either found the other, a measure of the length they share.
 
 ## read\_singularities
 

@@ -6,7 +6,7 @@ The trajectories are the isolines of a stripe pattern [Knöppel et al. 2015] com
 a function on the mesh whose gradient follows the directional field, with a prescribed frequency.
 Its isolines at multiples of 2π run across the field, one spacing apart.
 
-* The frequency is `1 / spacing`, with `spacing = 2 * stitch_height / stretch`.
+* The frequency is `1 / spacing`, with `spacing = 2 * stitch_height / stretch_wale`, the pre-strain along the wale.
 * The field is a line field: `v` and `-v` are the same direction.
 
 Measured on `2part_remesh2`, the median distance between neighbouring trajectories is within 0.1 % of
