@@ -1,0 +1,48 @@
+# stripes
+
+Knitting trajectories from a user-defined directional field (Chapter 6, Section 6.2.1).
+The trajectories are the isolines of a stripe pattern [Knöppel et al. 2015] aligned with the field,
+spaced `--spacing` apart. Ported from `src/main2*.cpp` in the
+[shrink-morph fork](https://github.com/duchaoyu/shrink-morph).
+
+At a singularity of the stripe pattern the trajectories are linked by stripe level, in
+`src/singularities.cpp`, instead of geometry-central's `connectIsolinesOnSingularities`, which
+could join a trajectory to its neighbour (a U-turn). One trajectory ends at each singularity.
+
+## Build
+
+```
+cmake -S src/cpp_stripes -B src/cpp_stripes/build
+cmake --build src/cpp_stripes/build -j 8
+```
+
+CMake downloads libigl, polyscope and geometry-central at the same revisions as shrink-morph.
+
+## Run
+
+From Python, `compas_knit.stripes.generate_stripes(mesh, field, stitch_height)` calls this with
+`--size 0 --spacing 2*stitch_height`, see `scripts/knit.py`.
+
+
+```
+src/cpp_stripes/build/stripes <folder>/<name>.obj --spacing <s> [--size 1000] [--view]
+```
+
+Inputs, in `<folder>`:
+- `<name>.obj`, the triangle mesh
+- `<name>_vertex_directional_field.txt`, one `x y z` world-space vector per vertex, in mesh vertex order
+  (or pass another file with `--field`)
+
+Outputs, in `<folder>` (or `--out-dir`):
+- `<name>_remesh.obj`, the mesh rescaled so its largest extent is `--size` (`--size 0` keeps the mesh units)
+- `<name>_tri_path.txt`, one trajectory per line, `x,y,z; x,y,z; ...`
+- with `--face-field <file>`, the field averaged onto each face, one `x y z` per face
+
+`--spacing` is in the units of the rescaled mesh, and is the course spacing 2·st_h
+(divided by the stretch factor where the knit is pre-strained). Values used before:
+
+| model | command |
+|---|---|
+| 2part/anisotropic/2part_remesh2 | `--spacing 4.594098288282881` (= 4.532151655555558 · 1.218 / 1201.576538 · 1000) |
+| iass_2024/barrel_vault | `--size 1200 --spacing <4.532151655555558 / W · 1000>`, W = original largest extent (printed as "The coefficiency is") |
+| iass_2024/barrel_vault_1200mm, boundary field | `--size 1200 --spacing 8 --field barrel_vault_boundary_vertex_directional_field.txt` |

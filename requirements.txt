@@ -1,0 +1,5 @@
+compas >=2.4
+numpy
+scipy
+pillow
+compas_viewer
