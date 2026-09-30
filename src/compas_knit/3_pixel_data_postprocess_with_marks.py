@@ -9,8 +9,8 @@ from PIL import Image
 
 # VARIABLE
 
-folder = os.path.abspath("/Users/duch/Documents/PhD/knit/2024_prototypes/2part/8_15")
-filename = "2part"
+folder = os.path.abspath("/Users/duch/Documents/PhD/knit/2024_prototypes/callibration/flat_no_shortrows")
+filename = "flat_no_shortrows_prestrain"
 
 pixel_data_file_path = os.path.join(folder, filename + "_pixel_data_dict.pkl")
 pixel_data_file_path_o = os.path.join(folder, filename + "_pixel_data_dict_o.pkl")

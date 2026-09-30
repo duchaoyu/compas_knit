@@ -10,8 +10,9 @@ from compas.utilities import geometric_key
 
 # VARIABLE
 
-folder = os.path.abspath("/Users/duch/Documents/PhD/knit/2024_prototypes/2part/8_15")
-filename = "2part"
+folder = os.path.abspath("/Users/duch/Documents/PhD/knit/2024_prototypes/callibration/flat_no_shortrows")
+filename = "flat_no_shortrows_prestrain"
+
 
 # reconstructed polylines 
 file_path = os.path.join(folder, filename + "_tri_path_recons.txt")
@@ -59,18 +60,32 @@ with open(feature_file_path_opt, 'r') as file:
 print(len(feature_dict_opt.keys()))
 
 
-# tiles
+# # tiles
 feature_tile_dict = {}
-tile_file_path = os.path.join(folder, filename + "_feature_tiles.txt")
-with open(tile_file_path, 'r') as file:
+# tile_file_path = os.path.join(folder, filename + "_feature_tiles.txt")
+# with open(tile_file_path, 'r') as file:
+#     for line in file:
+#         # Remove whitespace and newline characters, then split by semicolon
+#         point, color  = line.strip().split('; ')
+#         gkey = geometric_key(map(float, point.split(',')))
+#         color = tuple(map(int, color.split(',')))
+#         feature_tile_dict[gkey] = color
+
+# print(len(feature_tile_dict.keys()))
+
+# stiffness
+feature_stiff_dict = {}
+stiff_file_path = os.path.join(folder, filename + "_feature_soft.txt")
+with open(stiff_file_path, 'r') as file:
     for line in file:
         # Remove whitespace and newline characters, then split by semicolon
         point, color  = line.strip().split('; ')
         gkey = geometric_key(map(float, point.split(',')))
         color = tuple(map(int, color.split(',')))
-        feature_tile_dict[gkey] = color
+        feature_stiff_dict[gkey] = color
 
-print(len(feature_tile_dict.keys()))
+print(len(feature_stiff_dict.keys()))
+
 
 
 polylines = []
@@ -286,6 +301,50 @@ for index, s_list in enumerate(sequence[1:]):
         
 
     
+# the direction test above compares each course only with its neighbour, which
+# drifts where courses are short or meet at an angle. the alignment feature sits
+# on the first point of every course that carries one, so where it is present it
+# settles the direction outright: the marked end has to come first, otherwise the
+# course is rasterised backwards and the piece smears sideways across the bed.
+# courses without a mark keep the neighbour heuristic above.
+for i, polyline in enumerate(polylines):
+    marked = [j for j, point in enumerate(polyline)
+              if geometric_key(point) in feature_dict]
+    if marked:
+        polyline_dir_dict[i] = min(marked) > (len(polyline) - 1 - max(marked))
+
+
+# a course carrying no mark cannot be settled that way, and the neighbour test
+# gets those wrong often enough to smear the piece sideways. compare it instead
+# with the nearest course that does carry a mark, whose direction is now known
+# to be right, and make the two run the same way.
+def mean_direction(polyline):
+    d = np.diff(polyline, axis=0)
+    n = np.linalg.norm(d, axis=1, keepdims=True)
+    d = d / np.where(n > 0, n, 1)
+    m = np.mean(d, axis=0)
+    norm = np.linalg.norm(m)
+    return m / norm if norm > 0 else m
+
+
+marked_keys = [i for i, polyline in enumerate(polylines)
+               if any(geometric_key(point) in feature_dict for point in polyline)]
+if marked_keys:
+    marked_set = set(marked_keys)
+    marked_centres = np.array([np.mean(polylines[i], axis=0) for i in marked_keys])
+    marked_dirs = [mean_direction(np.array(polylines[i][::-1] if polyline_dir_dict[i]
+                                           else polylines[i])) for i in marked_keys]
+    for i, polyline in enumerate(polylines):
+        if i in marked_set or len(polyline) < 2:
+            continue
+        centre = np.mean(polyline, axis=0)
+        nearest = int(np.argmin(np.linalg.norm(marked_centres - centre, axis=1)))
+        current = mean_direction(np.array(polyline))
+        if polyline_dir_dict[i]:
+            current = current * -1
+        if np.dot(current, marked_dirs[nearest]) < 0:
+            polyline_dir_dict[i] = not polyline_dir_dict[i]
+
 # align all the polylines in the same direction 
 for i, polyline in enumerate(polylines):
     if polyline_dir_dict[i]:
@@ -354,6 +413,9 @@ for idx in sequence[0]:
         elif geometric_key(point) in feature_tile_dict.keys():
             pixel_data[(x, y)] = feature_tile_dict[geometric_key(point)]
             pixel_data[(x, y+1)] = feature_tile_dict[geometric_key(point)]
+        elif geometric_key(point) in feature_stiff_dict.keys():
+            pixel_data[(x, y)] = feature_stiff_dict[geometric_key(point)]
+            pixel_data[(x, y+1)] = feature_stiff_dict[geometric_key(point)]
         else:
             pixel_data[(x, y)] = (0, 0, 0)  # black
             pixel_data[(x, y+1)] = (255, 0, 0) # red
@@ -539,27 +601,31 @@ pixel_data = pixel_data_modified
 
 
 # TEMPORARY!!!! ------------------------------------------------
+# align every course on the same feature marker, otherwise the rows stay
+# staggered across the bed and the bitmap is far wider than the piece itself.
+# regroup pixel_data (the merged result) rather than reusing pixel_data_copy,
+# which was built before the short rows were inserted and would drop them.
+align_color = (0, 255, 255)
+
+pixel_rows = {}
+for (x, y), color in pixel_data.items():
+    pixel_rows.setdefault(y, {})[(x, y)] = color
+
 alignment = None
 shift = 0
 pixel_data_alignment = {}
-for pixel_y in sorted(pixel_data_copy.keys()):
-    if alignment is None:
-        
-        for (x,y), color in pixel_data_copy[pixel_y].items():
-            if color == (0, 255, 255):
-                alignment = x
-                break
-        for (x,y), color in pixel_data_copy[pixel_y].items():
-            pixel_data_alignment[(x, y)] = color
-    else:
-        for (x,y), color in pixel_data_copy[pixel_y].items():
-            if color == (0, 255 ,255): 
-                shift = alignment - x
-                break
-        for (x,y), color in pixel_data_copy[pixel_y].items():
-            pixel_data_alignment[(x+shift, y)] = color
-            
-            
+for pixel_y in sorted(pixel_rows.keys()):
+    # leftmost marker of the row, so the reference does not depend on the
+    # iteration order of the dict
+    marks = [x for (x, y), color in pixel_rows[pixel_y].items() if color == align_color]
+    if marks:
+        if alignment is None:
+            alignment = min(marks)
+        shift = alignment - min(marks)
+    # a row without a marker keeps the shift of the last row that had one
+    for (x, y), color in pixel_rows[pixel_y].items():
+        pixel_data_alignment[(x + shift, y)] = color
+
 pixel_data = pixel_data_alignment
 # TEMPORARY!!!! ------------------------------------------------
     

@@ -49,28 +49,30 @@ for y in range(min_y, max_y+1):
         if (max_x, y) in pixel_data.keys():
             pixel_data[(max_x+1, y)] = (0, 128,0) # back stitch
             # pixel_data[(max_x+2, y)] = (200, 100, 100) # front stitch
-            pixel_data[(max_x+3, y)] = (0, 128,0) # back stitch
+            pixel_data[(max_x+4, y)] = (0, 128,0) # back stitch
             
-            if count % 15 < 6:
-                pixel_data[(max_x+2, y)] = (200, 100, 100) # front stitch
-            else:
-                pixel_data[(max_x+2, y)] =(100, 100, 100) # float 
+            # if count % 15 < 6:
+            pixel_data[(max_x+3, y)] = (200, 100, 100) # front stitch
+            pixel_data[(max_x+2, y)] = ( 255, 87, 51) # float
+            # else:
+            #     pixel_data[(max_x+2, y)] =(100, 100, 100) # float 
             
-            count += 1
+            # count += 1
             
             
     else:
         if (max_x, y) in pixel_data.keys():
             pixel_data[(max_x+1, y)] =  (200, 100, 100) 
             # pixel_data[(max_x+2, y)] =(0, 128,0)
-            pixel_data[(max_x+3, y)] = (200, 100, 100) 
+            pixel_data[(max_x+4, y)] = (200, 100, 100) 
             
-            if count % 15 < 6:
-                pixel_data[(max_x+2, y)] = (0, 128, 0)
-            else:
-                pixel_data[(max_x+2, y)] =(100, 100, 100) # float 
+            # if count % 15 < 6:
+            pixel_data[(max_x+3, y)] = (0, 128, 0)
+            pixel_data[(max_x+2, y)] = ( 255, 87, 51) # float
+            # else:
+            #     pixel_data[(max_x+2, y)] =(100, 100, 100) # float 
                 
-            count += 1 
+            # count += 1 
         
         
 

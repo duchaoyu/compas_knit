@@ -9,8 +9,8 @@ from scipy.spatial import KDTree
 
 # VARIABLE
 
-folder = os.path.abspath("/Users/duch/Documents/PhD/knit/2024_prototypes/2part/8_15")
-filename = "2part"
+folder = os.path.abspath("/Users/duch/Documents/PhD/knit/2024_prototypes/callibration/flat_no_shortrows")
+filename = "flat_no_shortrows_prestrain"
 # filename = "semi_sphere_tri"
 # reconstructed polylines 
 file_path = os.path.join(folder, filename + "_tri_path_recons.txt")
@@ -20,8 +20,14 @@ sequence_file_path = os.path.join(folder, filename + "_tri_sequence_dict.pkl")
 field_path = os.path.join(folder, filename + "_vertex_directional_field.txt")
 mesh_path = os.path.join(folder, filename + ".obj")
 
-# the distance between two polylines
-distance = 4.762 * 1.85
+# the distance between two polylines.
+# measured row spacing here is ~5.7 (gauge 4.762 on a model scaled 1.2x) and the
+# second row sits at ~11.4, so keep this between those two: large enough to reach
+# the immediate neighbour on oblique cells, small enough never to link row n to n+2
+distance = 4.762 * 2.1
+# two polylines count as neighbours only if they stay this close along the
+# length they share, not just at a single point
+separation = 4.762 * 1.7
 
 bbscale = 1.02
 resX = 10
@@ -54,6 +60,10 @@ def get_grid_index(P, bb_scale, resolutionX, resolutionY, resolutionZ):
 
     # Bounding box dimensions
     dim = bb_max - bb_min
+    # a flat axis gives zero grid spacing (nan indices), so offset the
+    # bounds on that axis to a non-zero extent around the geometry
+    fallback = np.max(dim) if np.max(dim) > 0 else 1.0
+    dim = np.where(dim > 0, dim, fallback)
     bb_min_m = bb_max - bb_scale * dim
     bb_max_m = bb_min + bb_scale * dim
     dim_m = bb_max_m - bb_min_m
@@ -92,6 +102,10 @@ def get_grid_center(P, bb_scale, resolutionX, resolutionY, resolutionZ):
 
     # Bounding box dimensions
     dim = bb_max - bb_min
+    # a flat axis gives zero grid spacing (nan indices), so offset the
+    # bounds on that axis to a non-zero extent around the geometry
+    fallback = np.max(dim) if np.max(dim) > 0 else 1.0
+    dim = np.where(dim > 0, dim, fallback)
     bb_min_m = bb_max - bb_scale * dim
     bb_max_m = bb_min + bb_scale * dim
     dim_m = bb_max_m - bb_min_m
@@ -121,6 +135,10 @@ def get_grid_pts(P, bb_scale, resolutionX, resolutionY, resolutionZ):
 
     # Bounding box dimensions
     dim = bb_max - bb_min
+    # a flat axis gives zero grid spacing (nan indices), so offset the
+    # bounds on that axis to a non-zero extent around the geometry
+    fallback = np.max(dim) if np.max(dim) > 0 else 1.0
+    dim = np.where(dim > 0, dim, fallback)
     bb_min_m = bb_max - bb_scale * dim
     bb_max_m = bb_min + bb_scale * dim
     dim_m = bb_max_m - bb_min_m
@@ -260,13 +278,30 @@ for grid, vkeys in cell_mesh_xyz_dict.items():
         
 # print(cell_vector_dict)
 
+# which polyline each node belongs to
+node_poly_index = {node: network.node_attribute(node, 'index') for node in network.nodes()}
+
+# the points of each cell together with those of its adjacent cells, so that two
+# polylines that are close but sit on opposite sides of a cell border can still
+# be linked. the vector field stays per cell.
+cell_nbr_pt_dict = {}
+for cell in cell_pt_dict:
+    nbr_pts = []
+    for di in (-1, 0, 1):
+        for dj in (-1, 0, 1):
+            for dk in (-1, 0, 1):
+                nbr = (cell[0] + di, cell[1] + dj, cell[2] + dk)
+                if nbr in cell_pt_dict:
+                    nbr_pts.extend(cell_pt_dict[nbr])
+    cell_nbr_pt_dict[cell] = nbr_pts
+
 # iterate through all the cells
 # check whether all the polylines have 2 neighbors 
 for (cell, cell_polyline_indices) in cell_poly_dict.items():
-    # all the points in the cell
-    cell_pts = cell_pt_dict[cell]
+    # all the points in the cell and in the cells around it
+    cell_pts = cell_nbr_pt_dict[cell]
     print(cell)
-    if len(cell_polyline_indices) > 1: # make sure it's not iteself comparing to itself
+    if len(cell_polyline_indices) > 0:
         for idx in cell_polyline_indices: 
                 
             # print(cell_polyline_indices)
@@ -282,7 +317,8 @@ for (cell, cell_polyline_indices) in cell_poly_dict.items():
                 
                 other_nodes = []
                 for pt in cell_pts:
-                    if pt not in nodes and network.node_attribute(pt, 'index') not in checked_indices:
+                    pt_idx = node_poly_index[pt]
+                    if pt_idx != idx and pt_idx not in checked_indices:
                         other_nodes.append(pt)
                 
                 if len(other_nodes) == 0:
@@ -301,13 +337,19 @@ for (cell, cell_polyline_indices) in cell_poly_dict.items():
                 nearby_points_xyz = [other_nodes_xyz[i] for i in results]
                 
                 for (nbr_pt, nbr_pt_xyz) in zip(nearby_points, nearby_points_xyz):
-                    nbr_polyline_idx = network.node_attribute(nbr_pt, 'index')
+                    nbr_polyline_idx = node_poly_index[nbr_pt]
                     if nbr_polyline_idx not in checked_indices:
                         min_node_nbr_pt_vec = [b-a for (a, b) in zip(node_xyz, nbr_pt_xyz)]
+                        # record both directions of the link: if nbr comes after idx,
+                        # then idx comes before nbr. without the reciprocal entry the
+                        # walk in script 2 breaks wherever a link was only seen from
+                        # one side, which fragments the sequence into many chains
                         if np.dot(min_node_nbr_pt_vec, cell_vector_dict[cell]) > 0:
                             sequence_dict[idx]['next'].append(nbr_polyline_idx)
+                            sequence_dict[nbr_polyline_idx]['prev'].append(idx)
                         else:
                             sequence_dict[idx]['prev'].append(nbr_polyline_idx)
+                            sequence_dict[nbr_polyline_idx]['next'].append(idx)
                         checked_indices.add(nbr_polyline_idx)
                 
                 
@@ -352,6 +394,81 @@ for (cell, cell_polyline_indices) in cell_poly_dict.items():
 for key in sequence_dict.keys():
     sequence_dict[key]['prev'] = list(set(sequence_dict[key]['prev']))
     sequence_dict[key]['next'] = list(set(sequence_dict[key]['next']))
+
+# the search above links two polylines as soon as a single pair of their points
+# is within reach, so curves that only graze each other at a short row tip get
+# recorded as neighbours. keep, on each side, the one polyline that actually
+# runs alongside: the nearest by median separation over the length they share.
+polyline_trees = [KDTree(np.array(polyline)) for polyline in polylines]
+
+
+def polyline_separation(a, b):
+    # take the smaller of the two directions, so a short row running along a
+    # long one is not penalised by the part of the long one it does not follow
+    d, _ = polyline_trees[b].query(np.array(polylines[a]))
+    e, _ = polyline_trees[a].query(np.array(polylines[b]))
+    return min(np.median(d), np.median(e))
+
+
+filtered_dict = {key: {'prev': [], 'next': []} for key in sequence_dict}
+for key, value in sequence_dict.items():
+    for side in ('prev', 'next'):
+        candidates = [(polyline_separation(key, nbr), nbr) for nbr in value[side]]
+        candidates = [(sep, nbr) for (sep, nbr) in candidates if sep < separation]
+        if candidates:
+            filtered_dict[key][side] = [min(candidates)[1]]
+
+# a link kept from one side has to be present on the other side as well
+for key, value in filtered_dict.items():
+    for nbr in value['next']:
+        if key not in filtered_dict[nbr]['prev']:
+            filtered_dict[nbr]['prev'] = [key]
+    for nbr in value['prev']:
+        if key not in filtered_dict[nbr]['next']:
+            filtered_dict[nbr]['next'] = [key]
+
+sequence_dict = filtered_dict
+
+# the cell based search above proposes candidates only from the grid cells a
+# polyline passes through, so a short row sitting just across a cell border can
+# end up with nothing on one side and drop out of the sequence entirely. give
+# every loose end one more chance against every polyline, using the same
+# separation test, and classify the side with the field as before.
+for key in sequence_dict:
+    for side, opposite in (('prev', 'next'), ('next', 'prev')):
+        if sequence_dict[key][side]:
+            continue
+        taken = set(sequence_dict[key]['prev'] + sequence_dict[key]['next'])
+        candidates = []
+        for other in sequence_dict:
+            if other == key or other in taken:
+                continue
+            if key in sequence_dict[other][opposite]:
+                continue
+            sep = polyline_separation(key, other)
+            if sep < separation:
+                candidates.append((sep, other))
+        if not candidates:
+            continue
+        nbr = min(candidates)[1]
+        # which side the neighbour is on, by the field at the closest point
+        a = np.array(polylines[key])
+        d, i = polyline_trees[nbr].query(a)
+        j = int(np.argmin(d))
+        node_xyz = a[j]
+        nbr_xyz = np.array(polylines[nbr])[int(i[j])]
+        grid = network.node_attribute(
+            list(network.nodes_where({'index': key}))[0], 'grid')
+        cell = next((c for c in cell_vector_dict
+                     if c[0] + (resX - 1) * (c[1] + (resY - 1) * c[2]) == grid), None)
+        if cell is None:
+            continue
+        if np.dot(nbr_xyz - node_xyz, cell_vector_dict[cell]) > 0:
+            sequence_dict[key]['next'] = [nbr]
+            sequence_dict[nbr]['prev'] = sequence_dict[nbr]['prev'] + [key]
+        else:
+            sequence_dict[key]['prev'] = [nbr]
+            sequence_dict[nbr]['next'] = sequence_dict[nbr]['next'] + [key]
     
 
 print(sequence_dict)
