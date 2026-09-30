@@ -7,7 +7,7 @@ from compas_knit.viewer import view_field, view_stripes
 ## view\_stripes
 
 ```python
-view_stripes(mesh, trajectories, links=None, singularities=None, view="top", show_mesh=True, colors=("#ffba08", "#9d0208"))
+view_stripes(mesh, trajectories, links=None, singularities=None, show_sequence=True, view="top", show_mesh=True, colors=("#fb8500", "#1a7431"))
 ```
 
 Show the mesh and the trajectories in compas\_viewer. Blocks until the window is closed.
@@ -19,9 +19,10 @@ The camera is centred on the mesh and zoomed to fit it.
 | `trajectories` | `list[Polyline]` | as returned by [`generate_stripes`](stripes.md#generate_stripes) |
 | `links` | `list[tuple]` | the links from [`read_neighbours`](stripes.md#read_neighbours); the trajectories are then coloured by their position in the knitting order, see [`order_trajectories`](stripes.md#order_trajectories) |
 | `singularities` | `list[tuple]` | from [`read_singularities`](stripes.md#read_singularities), shown as points: stripe singularities, where a trajectory ends, blue; field singularities black; larger where the index is beyond one. Each group can be hidden in the scene panel |
+| `show_sequence` | `bool` | start with the trajectories coloured by the knitting order (needs `links`); otherwise all black. A **Show sequence** checkbox in the side panel switches between the two |
 | `view` | `str` | the initial view: `"top"`, `"perspective"`, `"front"` or `"right"` |
 | `show_mesh` | `bool` | show the mesh under the trajectories |
-| `colors` | `tuple[str, str]` | hex colours of the first and the last trajectories in the order, blended in OKLab; default amber to dark red |
+| `colors` | `tuple[str, str]` | hex colours of the first and the last trajectories in the order, blended in OKLab; default orange to green |
 
 ```python
 view_stripes("out/model_remesh.obj", trajectories,

@@ -17,7 +17,16 @@ from compas.geometry import bounding_box
 __all__ = ["view_stripes", "view_field"]
 
 
-def view_stripes(mesh, trajectories, links=None, singularities=None, view="top", show_mesh=True, colors=("#ffba08", "#9d0208")):
+def view_stripes(
+    mesh,
+    trajectories,
+    links=None,
+    singularities=None,
+    show_sequence=True,
+    view="top",
+    show_mesh=True,
+    colors=("#fb8500", "#1a7431"),
+):
     """Show the mesh and the trajectories. Blocks until the window is closed.
 
     Parameters
@@ -29,21 +38,26 @@ def view_stripes(mesh, trajectories, links=None, singularities=None, view="top",
     links : list[tuple[int, int, int]], optional
         The links between neighbouring trajectories, as returned by :func:`compas_knit.stripes.read_neighbours`.
         The trajectories are then coloured by their position in the knitting order, see
-        :func:`compas_knit.stripes.order_trajectories`, from the first colour to the second.
+        :func:`compas_knit.stripes.order_trajectories`, from the first colour to the second, and a checkbox
+        in the side panel switches between that and black.
     singularities : list[tuple[str, list[float], int]], optional
         As returned by :func:`compas_knit.stripes.read_singularities`, shown as points: stripe singularities,
         where a trajectory ends, blue, field singularities black.
         Those with an index beyond one are drawn larger.
+    show_sequence : bool, optional
+        Start with the trajectories coloured by their position in the knitting order, needs ``links``.
+        Otherwise, and without ``links``, they are all black.
     view : {"top", "perspective", "front", "right"}, optional
         The initial view. Switch views in the viewer under View.
     show_mesh : bool, optional
         Show the mesh under the trajectories.
     colors : tuple[str, str], optional
-        Hex colours of the first and the last trajectories in the order.
+        Hex colours of the first and the last trajectories in the order, by default orange to green.
 
     """
     from compas_viewer import Viewer  # optional dependency
 
+    from compas_viewer.components.booleantoggle import BooleanToggle
     from compas_viewer.scene import Collection
 
     from compas_knit.stripes import order_trajectories
@@ -51,14 +65,15 @@ def view_stripes(mesh, trajectories, links=None, singularities=None, view="top",
     if isinstance(mesh, str):
         mesh = Mesh.from_obj(mesh)
 
+    plain_colors = [Color.black()] * len(trajectories)
+    sequence_colors = None
     if links is not None:
         position, cyclic = order_trajectories(links, len(trajectories))
         if cyclic:
             print("warning: {} trajectories are on a cycle of links, the knitting needs a seam there".format(len(cyclic)))
         top = max(max(position), 1)
-        line_colors = [_blend(colors[0], colors[1], p / top) for p in position]
-    else:
-        line_colors = [Color.from_hex(colors[1])] * len(trajectories)
+        sequence_colors = [_blend(colors[0], colors[1], p / top) for p in position]
+    line_colors = sequence_colors if (show_sequence and sequence_colors) else plain_colors
 
     viewer = Viewer()
     viewer.renderer.view = view
@@ -75,10 +90,24 @@ def view_stripes(mesh, trajectories, links=None, singularities=None, view="top",
     tree = cKDTree(xyz)
 
     group = viewer.scene.add_group(name="trajectories")
+    objects = []
     for i, (polyline, color) in enumerate(zip(trajectories, line_colors)):
         points = np.array([list(point) for point in polyline.points])
         points = points + lift * normals[tree.query(points)[1]]
-        group.add(Polyline(points.tolist()), name="trajectory {}".format(i), linecolor=color, linewidth=2)
+        objects.append(group.add(Polyline(points.tolist()), name="trajectory {}".format(i), linecolor=color, linewidth=2))
+
+    if sequence_colors:
+        # a checkbox in the side panel switches between the knitting order and one colour
+        state = {"show_sequence": bool(show_sequence)}
+
+        def recolor(component, checked):
+            for obj, color in zip(objects, sequence_colors if checked else plain_colors):
+                obj.linecolor = color
+                obj.update(update_data=True)
+            viewer.renderer.update()
+
+        viewer.ui.sidedock.show = True  # the config is read when the viewer is made, so show the panel directly
+        viewer.ui.sidedock.add(BooleanToggle(state, "show_sequence", title="Show sequence", action=recolor))
 
     if singularities:
         # one scene object per kind, so each can be switched on and off in the scene panel
