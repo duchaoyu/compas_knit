@@ -20,12 +20,12 @@ CMake downloads libigl, polyscope and geometry-central at the same revisions as 
 
 ## Run
 
-From Python, `compas_knit.stripes.generate_stripes(mesh, field, stitch_height)` calls this with
-`--size 0 --spacing 2*stitch_height`, see `scripts/knit.py`.
+From Python, `compas_knit.stripes.generate_stripes(mesh, field, stitch_height, stitch_width)` calls this with
+`--size 0 --spacing 2*stitch_height --stitch-width stitch_width`, see `scripts/knit.py`.
 
 
 ```
-src/cpp_stripes/build/stripes <folder>/<name>.obj --spacing <s> [--size 1000] [--view]
+src/cpp_stripes/build/stripes <folder>/<name>.obj --spacing <s> --stitch-width <w> [--size 1000] [--view]
 ```
 
 Inputs, in `<folder>`:
@@ -36,7 +36,7 @@ Inputs, in `<folder>`:
 Outputs, in `<folder>` (or `--out-dir`):
 - `<name>_remesh.obj`, the mesh rescaled so its largest extent is `--size` (`--size 0` keeps the mesh units)
 - `<name>_tri_path.txt`, one trajectory per line, `x,y,z; x,y,z; ...`, all running the same way along field × normal
-- with `--stitch-width <w>`, `<name>_tri_path_recons.txt`, the trajectories divided into stitches of width `<w>`,
+- `<name>_tri_path_recons.txt`, the trajectories divided into stitches of width `<w>`,
   one point per stitch, as Grasshopper's DivideDistance
 - `<name>_neighbours.txt`, one link per line, `a b n`: trajectory `b` comes after `a` along the field,
   adjacent on `n` mesh edges

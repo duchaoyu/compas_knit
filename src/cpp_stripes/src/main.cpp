@@ -5,12 +5,12 @@
 // trajectories as the isolines of a stripe pattern [Knoppel et al. 2015] aligned
 // with the field. Ported from shrink-morph src/main2.cpp.
 //
-// usage: stripes <mesh.obj> --spacing <s> [options]
+// usage: stripes <mesh.obj> --spacing <s> --stitch-width <w> [options]
 //
 // outputs, written next to the mesh unless --out-dir is given:
 //   <name>_remesh.obj   the mesh rescaled to --size (unchanged with --size 0), which the trajectories live on
 //   <name>_tri_path.txt one polyline per line, "x,y,z; x,y,z; ...", all running the same way, field x normal
-//   <name>_tri_path_recons.txt  with --stitch-width, the trajectories divided into stitches, one point per stitch
+//   <name>_tri_path_recons.txt  the trajectories divided into stitches, one point per stitch
 //   <name>_neighbours.txt  one link per line, "a b n": trajectory b comes after a along the field, adjacent on n mesh edges
 //   <name>_singularities.txt  one singular triangle per line, "stripe|field x y z index", at the triangle centre
 
@@ -45,15 +45,15 @@ using namespace geometrycentral::surface;
 
 namespace fs = std::filesystem;
 
-const char* USAGE = R"(usage: stripes <mesh.obj> --spacing <s> [options]
+const char* USAGE = R"(usage: stripes <mesh.obj> --spacing <s> --stitch-width <w> [options]
 
   --spacing <s>        distance between trajectories, in units of the rescaled mesh (required)
+  --stitch-width <w>   width of a stitch, in units of the rescaled mesh (required): the trajectories are divided into
+                       stitches, one point per stitch, written to <name>_tri_path_recons.txt
   --size <mm>          rescale the mesh so its largest extent is <mm> (default 1000), 0 keeps the mesh units
   --field <file>       per-vertex directional field (default <name>_vertex_directional_field.txt)
   --out-dir <dir>      where to write the outputs (default: the mesh directory)
   --face-field <file>  also write the field averaged onto each face, one "x y z" per face
-  --stitch-width <w>   also write the trajectories divided into stitches of width <w>, one point per stitch,
-                       to <name>_tri_path_recons.txt (in units of the rescaled mesh)
   --view               show the field and the trajectories in polyscope
 )";
 
@@ -141,7 +141,7 @@ int main(int argc, char** argv)
       return EXIT_FAILURE;
     }
   }
-  if(meshPath.empty() || spacing <= 0)
+  if(meshPath.empty() || spacing <= 0 || stitchWidth <= 0)
   {
     std::cerr << USAGE;
     return EXIT_FAILURE;
@@ -275,33 +275,26 @@ int main(int argc, char** argv)
       file << "\n";
     }
   };
-  // with stitches, trajectories shorter than one stitch are left out of all the outputs, so that a trajectory
-  // has the same index in each of them
-  std::vector<std::vector<Vector3>> stitches;
+  // divide the trajectories into stitches; those shorter than one stitch are left out of all the outputs,
+  // so that a trajectory has the same index in each of them
+  std::vector<std::vector<Vector3>> stitches, kept;
   size_t nStitches = 0;
-  if(stitchWidth > 0)
+  for(const auto& polyline: polylines)
   {
-    std::vector<std::vector<Vector3>> kept;
-    for(const auto& polyline: polylines)
-    {
-      auto divided = divideDistance(polyline, stitchWidth);
-      if(divided.size() < 2)
-        continue;
-      nStitches += divided.size();
-      stitches.push_back(divided);
-      kept.push_back(polyline);
-    }
-    std::cout << polylines.size() - kept.size() << " trajectories shorter than a stitch left out" << std::endl;
-    polylines = kept;
+    auto divided = divideDistance(polyline, stitchWidth);
+    if(divided.size() < 2)
+      continue;
+    nStitches += divided.size();
+    stitches.push_back(divided);
+    kept.push_back(polyline);
   }
+  std::cout << polylines.size() - kept.size() << " trajectories shorter than a stitch left out" << std::endl;
+  polylines = kept;
 
   writePolylines(polylinePath, polylines);
   std::cout << "Wrote " << polylines.size() << " trajectories to " << polylinePath << std::endl;
-  if(stitchWidth > 0)
-  {
-    writePolylines(stitchPath, stitches);
-    std::cout << "Wrote " << nStitches << " stitches to " << stitchPath << std::endl;
-  }
+  writePolylines(stitchPath, stitches);
+  std::cout << "Wrote " << nStitches << " stitches to " << stitchPath << std::endl;
 
   // which trajectory comes after which along the field
   auto links = findNeighbours(*geometry, stripeValues, stripeIndices, polylines, field);

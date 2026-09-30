@@ -14,7 +14,7 @@ name = "2part_remesh2"
 mesh_path = os.path.join(folder, name + ".obj")
 field_path = os.path.join(folder, name + "_vertex_directional_field.txt")
 
-trajectories = generate_stripes(mesh_path, field_path, stitch_height=2.297, out_dir=os.path.join(folder, "out"))
+trajectories = generate_stripes(mesh_path, field_path, stitch_height=2.297, stitch_width=3.54, out_dir=os.path.join(folder, "out"))
 print(len(trajectories), "trajectories")
 ```
 

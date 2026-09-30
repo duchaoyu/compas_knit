@@ -155,17 +155,20 @@ def view_field(mesh, field, view="top", length=None):
     from compas_viewer import Viewer  # optional dependency
     from compas_viewer.scene import Collection
 
+    from compas_knit.stripes import _mesh_arrays
+    from compas_knit.stripes import _vertex_normals
+
+    # the vertices in the order of the file, in step with the field, which Mesh.from_obj would merge
+    xyz, faces = _mesh_arrays(mesh)
     if isinstance(mesh, str):
-        mesh = Mesh.from_obj(mesh)
+        mesh = Mesh.from_vertices_and_faces(xyz.tolist(), faces.tolist())
     if isinstance(field, str):
         field = np.loadtxt(field)
     field = np.asarray(field, dtype=float)[:, :3]
-    vertices = list(mesh.vertices())
-    if len(field) != len(vertices):
-        raise ValueError("The field has {} vectors, the mesh {} vertices.".format(len(field), len(vertices)))
+    if len(field) != len(xyz):
+        raise ValueError("The field has {} vectors, the mesh {} vertices.".format(len(field), len(xyz)))
 
-    xyz = np.array(mesh.vertices_attributes("xyz"))
-    normals = np.array([mesh.vertex_normal(vertex) for vertex in vertices])
+    normals = _vertex_normals(xyz, faces)
     tangent = field - (field * normals).sum(axis=1)[:, None] * normals
     tangent /= np.maximum(np.linalg.norm(tangent, axis=1), 1e-12)[:, None]
     mean_edge = np.mean([mesh.edge_length(edge) for edge in mesh.edges()])

@@ -5,10 +5,11 @@ Edit the inputs below and run
 """
 import os
 
+from compas_knit import DATA
 from compas_knit.viewer import view_field
 
 # MODIFY -----------------------------------------------------------------
-folder = "/Users/duch/Documents/PhD/knit/2024_prototypes/2part/anisotropic"
+folder = os.path.join(DATA, "2part_remesh2")  # or e.g. os.path.join(DATA, "fabsim", "D5"), in metres
 name = "2part_remesh2"
 # -------------------------------------------------------------------------
 

@@ -7,8 +7,8 @@
 |---|---|---|---|
 | 1. Directional field | mesh | `<name>_vertex_directional_field.txt` | <!-- TODO --> |
 | 2. Trajectories | mesh, field, stitch height | `<name>_tri_path.txt` | [`generate_stripes`](../api/stripes.md#generate_stripes) |
-| 3. Ordering | trajectories | <!-- TODO --> | `1_path_preposs_ordering(kdtree).py` |
-| 4. Connecting, bitmap | <!-- TODO --> | <!-- TODO --> | `2_path_preposs_connect_bitmap.py` |
+| 3. Ordering | trajectories | `<name>_neighbours.txt` | `stripes`, [`read_neighbours`](../api/stripes.md#read_neighbours) |
+| 4. Sequence, bitmap | stitches, neighbours | `<name>_export_wo_optim.bmp`, `<name>_pixel_data_dict.pkl` | [`knitting_pattern`](../api/pattern.md) |
 | 5. Pixel post-processing | <!-- TODO --> | <!-- TODO --> | `3_pixel_data_postprocess.py` |
 | 6. Splitting | <!-- TODO --> | <!-- TODO --> | `4_bitmap_split.py` |
 | 7. Channels | <!-- TODO --> | <!-- TODO --> | `5_add_channel.py` |

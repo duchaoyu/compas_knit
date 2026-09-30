@@ -22,5 +22,6 @@
 
 * [Overview](api/README.md)
 * [compas\_knit.stripes](api/stripes.md)
+* [compas\_knit.pattern](api/pattern.md)
 * [compas\_knit.viewer](api/viewer.md)
 * [stripes (C++ executable)](api/cpp-stripes.md)

@@ -21,14 +21,14 @@ from compas.geometry import Polyline
 from compas_knit import HOME
 
 
-__all__ = ["generate_stripes", "check_trajectories", "order_trajectories", "read_trajectories", "read_neighbours", "read_singularities"]
+__all__ = ["generate_stripes", "check_trajectories", "order_trajectories", "read_trajectories", "read_neighbours", "read_singularities", "read_mesh"]
 
 
 STRIPES_EXE = os.environ.get("COMPAS_KNIT_STRIPES", os.path.join(HOME, "src", "cpp_stripes", "build", "stripes"))
 
 
-def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, stitch_width=None, out_dir=None, view=False, check=True):
-    """Extract equally spaced knitting trajectories from a directional field.
+def generate_stripes(mesh_path, field_path, stitch_height, stitch_width, stretch=1.0, out_dir=None, view=False, check=True):
+    """Extract equally spaced knitting trajectories from a directional field, divided into stitches.
 
     Parameters
     ----------
@@ -38,14 +38,15 @@ def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, stitch_w
         Per-vertex directional field, one ``x y z`` world-space vector per line, in mesh vertex order.
     stitch_height : float
         Stitch height st_h at theoretical zero stress, in the units of the mesh.
+    stitch_width : float
+        Stitch width st_w, in the units of the mesh. The trajectories are divided into stitches of this width,
+        one point per stitch, as Grasshopper's DivideDistance, written to ``<name>_tri_path_recons.txt``.
     stretch : float, optional
         Pre-strain stretch factor along the wale. The spacing is divided by it, see Section 6.3.3.
-    stitch_width : float, optional
-        Also divide the trajectories into stitches of this width, one point per stitch, as Grasshopper's
-        DivideDistance, and write them to ``<name>_tri_path_recons.txt``. In the units of the mesh.
     out_dir : str, optional
-        Where to write ``<name>_remesh.obj``, ``<name>_tri_path.txt`` and ``<name>_neighbours.txt``, see
-        :func:`read_neighbours`. Defaults to the mesh directory.
+        Where to write ``<name>_remesh.obj``, ``<name>_tri_path.txt``, ``<name>_tri_path_recons.txt``,
+        ``<name>_neighbours.txt`` (see :func:`read_neighbours`) and ``<name>_singularities.txt``.
+        Defaults to the mesh directory.
     view : bool, optional
         Show the field and the trajectories in polyscope. Blocks until the window is closed.
     check : bool, optional
@@ -54,8 +55,8 @@ def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, stitch_w
     Returns
     -------
     list[:class:`compas.geometry.Polyline`]
-        The trajectories, unordered, all running the same way along field x normal, in mesh coordinates. With ``stitch_width``, the trajectories divided
-        into stitches, leaving out those shorter than one stitch.
+        The trajectories divided into stitches, one point per stitch, unordered, all running the same way along
+        field x normal, in mesh coordinates. Trajectories shorter than one stitch are left out.
 
     """
     if not os.path.isfile(STRIPES_EXE):
@@ -77,10 +78,9 @@ def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, stitch_w
         "--field", field_path,
         "--spacing", repr(spacing),
         "--size", "0",  # keep the mesh units, so the spacing is in the same units as the stitch height
+        "--stitch-width", repr(stitch_width),
         "--out-dir", out_dir,
     ]
-    if stitch_width:
-        cmd += ["--stitch-width", repr(stitch_width)]
     if view:
         cmd.append("--view")
     subprocess.check_call(cmd)
@@ -89,9 +89,7 @@ def generate_stripes(mesh_path, field_path, stitch_height, stretch=1.0, stitch_w
     if check:
         for i, j, angle in check_trajectories(trajectories, mesh_path, field_path):
             print("warning: trajectory {} segment {} runs {:.0f} degrees from the field, it may join two trajectories".format(i, j, angle))
-    if stitch_width:
-        return read_trajectories(os.path.join(out_dir, name + "_tri_path_recons.txt"))
-    return trajectories
+    return read_trajectories(os.path.join(out_dir, name + "_tri_path_recons.txt"))
 
 
 def check_trajectories(trajectories, mesh, field, min_angle=60.0):
@@ -133,17 +131,55 @@ def check_trajectories(trajectories, mesh, field, min_angle=60.0):
     return suspects
 
 
+def read_mesh(path):
+    """Read the vertices and triangles of an ``.obj``, in the order of the file, as the stripes executable does.
+
+    Unlike :meth:`compas.datastructures.Mesh.from_obj`, it does not merge vertices at the same position, so the
+    vertices stay in step with a per-vertex field.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        The vertex coordinates, and the triangles as vertex indices.
+
+    """
+    vertices, faces = [], []
+    with open(path, "r") as f:
+        for line in f:
+            if line.startswith("v "):
+                vertices.append([float(c) for c in line.split()[1:4]])
+            elif line.startswith("f "):
+                faces.append([int(t.split("/")[0]) - 1 for t in line.split()[1:4]])
+    return np.array(vertices), np.array(faces, dtype=int)
+
+
+def _mesh_arrays(mesh):
+    """Vertices and triangles of a mesh given as a path, read in file order, or as a compas mesh."""
+    if isinstance(mesh, str):
+        return read_mesh(mesh)
+    index = {vertex: i for i, vertex in enumerate(mesh.vertices())}
+    xyz = np.array([mesh.vertex_coordinates(vertex) for vertex in mesh.vertices()])
+    faces = np.array([[index[vertex] for vertex in mesh.face_vertices(face)] for face in mesh.faces()])
+    return xyz, faces
+
+
+def _vertex_normals(xyz, faces):
+    """Area-weighted vertex normals."""
+    face_normals = np.cross(xyz[faces[:, 1]] - xyz[faces[:, 0]], xyz[faces[:, 2]] - xyz[faces[:, 0]])
+    normals = np.zeros_like(xyz)
+    for k in range(3):
+        np.add.at(normals, faces[:, k], face_normals)
+    return normals / np.maximum(np.linalg.norm(normals, axis=1), 1e-12)[:, None]
+
+
 def _face_field(mesh, field):
     """Return a function giving the unit field, sign free, in the face nearest to each of some points."""
-    if isinstance(mesh, str):
-        mesh = Mesh.from_obj(mesh)
+    xyz, faces = _mesh_arrays(mesh)
     if isinstance(field, str):
         field = np.loadtxt(field)
     field = np.asarray(field, dtype=float)[:, :3]
-
-    xyz = np.array(mesh.vertices_attributes("xyz"))
-    index = {vertex: i for i, vertex in enumerate(mesh.vertices())}
-    faces = np.array([[index[vertex] for vertex in mesh.face_vertices(face)] for face in mesh.faces()])
+    if len(field) != len(xyz):
+        raise ValueError("The field has {} vectors, the mesh {} vertices.".format(len(field), len(xyz)))
     corners = xyz[faces]
     normals = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
     normals /= np.linalg.norm(normals, axis=1)[:, None]

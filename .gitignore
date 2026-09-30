@@ -7,3 +7,6 @@ dist/
 .idea/
 .vscode/
 .DS_Store
+
+# outputs of the scripts, next to the inputs in data/
+data/**/out/

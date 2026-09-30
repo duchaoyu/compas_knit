@@ -20,14 +20,16 @@ from PIL import ImageFont
 from scipy.spatial import cKDTree
 
 from compas.datastructures import Mesh
+from compas_knit import DATA
 from compas_knit.stripes import check_trajectories
 from compas_knit.stripes import generate_stripes
 
 # MODIFY -----------------------------------------------------------------
-folder = "/Users/duch/Documents/PhD/knit/2024_prototypes/2part/anisotropic"
+folder = os.path.join(DATA, "2part_remesh2")
 name = "2part_remesh2"
 
 stitch_height = 2.297
+stitch_width = 3.54
 step = 5  # degrees
 # -------------------------------------------------------------------------
 
@@ -89,7 +91,7 @@ for angle in range(0, 180, step):
         saved = os.dup(1)
         os.dup2(log.fileno(), 1)
         try:
-            trajectories = generate_stripes(mesh_path, run_field, stitch_height, out_dir=run_dir, check=False)
+            trajectories = generate_stripes(mesh_path, run_field, stitch_height, stitch_width, out_dir=run_dir, check=False)
         finally:
             sys.stdout.flush()
             os.dup2(saved, 1)

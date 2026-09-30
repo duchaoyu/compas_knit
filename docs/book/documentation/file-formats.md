@@ -28,7 +28,7 @@ Read and write it with [`read_trajectories`](../api/stripes.md#read_trajectories
 
 ## Stitches — `<name>_tri_path_recons.txt`
 
-The trajectories divided into stitches, written with `--stitch-width` / `stitch_width`, in the same format as
+The trajectories divided into stitches, for the stitch width `--stitch-width` / `stitch_width`, in the same format as
 `_tri_path.txt`. From the first point of each trajectory, each next point lies on the trajectory at straight-line
 distance `stitch_width` from the previous one, as Grasshopper's DivideDistance does. The rest after the last full
 stitch is dropped, and trajectories shorter than one stitch are left out.
@@ -54,6 +54,12 @@ pattern, where trajectories end; `field`: a singularity of the directional field
 stripe 12.53 -470.1 -150.2 1
 field 0.0012 0.0008 0.3104 1
 ```
+
+## Knitting pattern — `<name>_export_wo_optim.bmp`, `<name>_pixel_data_dict.pkl`
+
+One pixel per stitch, two rows per trajectory: the row knitting out black, the row knitting back red. The bitmap is
+flipped top to bottom for the machine software; the pickle holds `{(x, y): (r, g, b)}` unflipped, from (0, 0), for
+`3_pixel_data_postprocess.py`.
 
 ## Rescaled mesh — `<name>_remesh.obj`
 
