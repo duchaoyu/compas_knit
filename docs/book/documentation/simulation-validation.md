@@ -78,8 +78,10 @@ inflated surface of 1.2227 m2:
 | 10 mm | 24 | 287.6 | 0.1526 | 0.1526 |
 | 20 mm | 48 | 575.2 | 0.1324 | 0.1324 |
 
-`scripts/simulate_concrete.py` is the example: the two-pattern field and the stretch factors 1.1 and 1.1, with 10 mm
-of concrete, 268 N, lowers the crown from 0.0741 to 0.0584 m.
+`scripts/simulate_inf_concrete.py` is the example: the two-pattern field and the stretch factors 1.1 and 1.1, with
+10 mm of concrete, 268 N, lowers the crown from 0.0741 to 0.0584 m; the pressure, 1000 Pa over a plan of 1.125 m2,
+about 1125 N, still holds it up. `scripts/simulate_concrete.py` has the concrete only, without the pressure: cast on the
+flat knit, it stretches it down, a hanging shape.
 
 ## The pressure work
 
@@ -107,6 +109,7 @@ only approximates at large strains, so these are not in the comparison.
 
 ```
 python scripts/simulate.py               # the example, and the viewer
-python scripts/simulate_concrete.py      # the same with a layer of concrete
+python scripts/simulate_inf_concrete.py  # the same, then a layer of concrete on the inflated knit
+python scripts/simulate_concrete.py      # a layer of concrete only, without the pressure
 python scripts/tests/simulate_disc.py    # the discs against Hencky, fails if more than 2 % off
 ```
