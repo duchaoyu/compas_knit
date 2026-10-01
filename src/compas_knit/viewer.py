@@ -1,4 +1,4 @@
-"""View the mesh, the directional field and the knitting trajectories in compas_viewer."""
+"""View the mesh, the directional field, the knitting trajectories and the simulated shape in compas_viewer."""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -14,7 +14,7 @@ from compas.geometry import Polyline
 from compas.geometry import bounding_box
 
 
-__all__ = ["view_stripes", "view_field"]
+__all__ = ["view_stripes", "view_field", "view_simulation"]
 
 
 def view_stripes(
@@ -188,6 +188,120 @@ def view_field(mesh, field, view="top", length=None):
     viewer.scene.add(Collection(lines), name="field", linecolor=Color.from_hex("#1f4e79"), linewidth=2)
 
     _frame(viewer, xyz, view)
+    viewer.show()
+
+
+def view_simulation(
+    original,
+    deformed,
+    stress=None,
+    quantity="von_mises",
+    field=None,
+    show_field=False,
+    view="perspective",
+    colors=("#dbeafe", "#1e3a8a"),
+):
+    """Show the original mesh and the simulated, deformed one. Blocks until the window is closed.
+
+    The original is drawn as its edges in black, the deformed mesh as faces, shaded by the stress from the first colour,
+    the lowest, to the second, the highest, or plain without the stress. Each can be switched off in the scene panel.
+    With the field, a checkbox in the side panel shows the wale direction on the deformed mesh.
+
+    Parameters
+    ----------
+    original : str | tuple[array, array]
+        The mesh before the simulation, the path to an ``.obj`` or its vertices and triangles.
+    deformed : str | tuple[array, array]
+        The deformed mesh, ``<out_prefix>_deformed.obj`` of :func:`compas_knit.simulation.simulate`, with the vertices
+        in the same order.
+    stress : str | array, optional
+        The stress per face, ``<out_prefix>_stress.csv``, or the ``stress`` that ``simulate`` returns.
+    quantity : str, optional
+        The column of the stress to shade by: ``von_mises``, ``principal_1``, ``principal_2``, ``T_wale_Nm``,
+        ``T_course_Nm``, ``S11``, ``S22`` or ``S12``.
+    field : str | array, optional
+        The directional field of the original mesh, the wale per vertex, or the path to its file. It is carried onto
+        the deformed mesh by the deformation of the triangles around each vertex.
+    show_field : bool, optional
+        Start with the field shown.
+    view : {"perspective", "top", "front", "right"}, optional
+        The initial view. Switch views in the viewer under View.
+    colors : tuple[str, str], optional
+        Hex colours of the lowest and the highest stress.
+
+    """
+    from compas_viewer import Viewer  # optional dependency
+    from compas_viewer.components.booleantoggle import BooleanToggle
+    from compas_viewer.scene import Collection
+
+    from compas_knit.stripes import _vertex_normals
+    from compas_knit.stripes import read_mesh
+
+    xyz0, faces0 = read_mesh(original) if isinstance(original, str) else map(np.asarray, original)
+    xyz, faces = read_mesh(deformed) if isinstance(deformed, str) else map(np.asarray, deformed)
+    if len(xyz0) != len(xyz):
+        raise ValueError("The original has {} vertices, the deformed mesh {}.".format(len(xyz0), len(xyz)))
+    before = Mesh.from_vertices_and_faces(xyz0.tolist(), faces0.tolist())
+    after = Mesh.from_vertices_and_faces(xyz.tolist(), faces.tolist())
+
+    facecolor = Color.from_hex(colors[1]).lightened(50)
+    if stress is not None:
+        columns = ["face", "S11", "S22", "S12", "von_mises", "principal_1", "principal_2", "T_wale_Nm", "T_course_Nm"]
+        if isinstance(stress, str):
+            with open(stress) as f:
+                columns = f.readline().strip().split(",")
+            stress = np.loadtxt(stress, delimiter=",", skiprows=1, ndmin=2)
+        values = np.asarray(stress)[:, columns.index(quantity)]
+        low, high = values.min(), values.max()
+        t = (values - low) / ((high - low) or 1.0)
+        facecolor = {face: _blend(colors[0], colors[1], t[i]) for i, face in enumerate(after.faces())}
+        print("{}: {:.4g} to {:.4g} N/m, {} to {}".format(quantity, low, high, colors[0], colors[1]))
+    print("largest displacement {:.4g} m".format(np.linalg.norm(xyz - xyz0, axis=1).max()))
+
+    viewer = Viewer()
+    viewer.renderer.view = view
+    viewer.config.renderer.show_grid = False
+
+    viewer.scene.add(before, name="original", show_faces=False, linecolor=Color.black(), linewidth=1)
+    viewer.scene.add(after, name="simulated", facecolor=facecolor, linecolor=Color.grey().darkened(30), linewidth=1, opacity=0.7)
+
+    if field is not None:
+        if isinstance(field, str):
+            field = np.loadtxt(field)
+        field = np.asarray(field, dtype=float)[:, :3]
+        if len(field) != len(xyz0):
+            raise ValueError("The field has {} vectors, the mesh {} vertices.".format(len(field), len(xyz0)))
+        # the deformation gradient of each triangle, from its edges before and after, applied to the field at its
+        # corners and averaged per vertex
+        edges0 = np.stack([xyz0[faces0[:, 1]] - xyz0[faces0[:, 0]], xyz0[faces0[:, 2]] - xyz0[faces0[:, 0]]], axis=2)
+        edges = np.stack([xyz[faces[:, 1]] - xyz[faces[:, 0]], xyz[faces[:, 2]] - xyz[faces[:, 0]]], axis=2)
+        grad = edges @ np.linalg.pinv(edges0)
+        moved = np.zeros_like(field)
+        for corner in range(3):
+            v = faces0[:, corner]
+            d = np.einsum("fij,fj->fi", grad, field[v])
+            # the field is a line field: keep the signs at a vertex together
+            sign = np.sign(np.einsum("fi,fi->f", d, moved[v]) + 1e-12)
+            np.add.at(moved, v, sign[:, None] * d)
+        normals = _vertex_normals(xyz, faces)
+        moved -= (moved * normals).sum(axis=1)[:, None] * normals
+        moved /= np.maximum(np.linalg.norm(moved, axis=1), 1e-12)[:, None]
+        mean_edge = np.linalg.norm(edges[:, :, 0], axis=1).mean()
+        half = 0.4 * mean_edge
+        centres = xyz + 0.05 * mean_edge * normals
+        lines = [Line(p - half * t, p + half * t) for p, t in zip(centres, moved)]
+        segments = viewer.scene.add(Collection(lines), name="field", linecolor=Color.from_hex("#fb8500"), linewidth=2, show=show_field)
+
+        state = {"show_field": bool(show_field)}
+
+        def toggle(component, checked):
+            segments.show = checked
+            viewer.renderer.update()
+
+        viewer.ui.sidedock.show = True
+        viewer.ui.sidedock.add(BooleanToggle(state, "show_field", title="Show field", action=toggle))
+
+    _frame(viewer, np.r_[xyz0, xyz], view)
     viewer.show()
 
 
