@@ -2,7 +2,9 @@
 
 The circular flat mesh, anchored on its boundary, inflated by a pressure. The knit is an orthotropic membrane, E_wale
 along the knitting direction, read per vertex from `<name>_vertex_directional_field.txt` as for the trajectories, and
-E_course across it. Writes `<name>_deformed.obj`, `_stress.csv` and `_summary.json` to `<folder>/out/`.
+E_course across it; here the wale runs along y. Writes `<name>_deformed.obj`, `_stress.csv` and `_summary.json` to
+`<folder>/out/`, then shows the simulated geometry over the original one, shaded by the stress, with a checkbox for
+the field.
 
 Edit the inputs below and run
     python scripts/simulate.py
@@ -14,6 +16,7 @@ import numpy as np
 from compas_knit import DATA
 from compas_knit.simulation import simulate
 from compas_knit.stripes import read_mesh
+from compas_knit.viewer import view_simulation
 
 # MODIFY -----------------------------------------------------------------
 folder = os.path.join(DATA, "circular_flat")
@@ -23,7 +26,10 @@ E_course = 5000.0  # N/m, along the course, across the directional field
 E_wale = 12500.0  # N/m, along the wale, the knitting direction of the directional field
 nu = 0.198
 pressure = 1000.0  # Pa
-stretch_wale, stretch_course = 1.0, 1.0  # pre-strain of the fabrication, 1: none
+stretch_wale, stretch_course = 1.1, 1.1  # pre-strain of the fabrication, 1: none
+
+quantity = "von_mises"  # the stress to shade by: principal_1, principal_2, T_wale_Nm, T_course_Nm, S11, S22, S12
+show_field = False  # start the viewer with the directional field shown
 # -------------------------------------------------------------------------
 
 
@@ -48,3 +54,6 @@ print("E_wale {:.0f} N/m, E_course {:.0f} N/m, nu {}".format(E_wale, E_course, n
 print("crown height {:.4f} m, max stress {:.0f} N/m, mean stress {:.0f} N/m ({})".format(
     s["crown_height"], s["max_stress"], s["mean_stress"], s["status"]))
 print("results in", os.path.join(folder, "out"))
+
+out = os.path.join(folder, "out", name)
+view_simulation(mesh, out + "_deformed.obj", out + "_stress.csv", quantity=quantity, field=field, show_field=show_field)

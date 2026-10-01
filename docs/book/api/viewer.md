@@ -63,8 +63,7 @@ view_simulation(original, deformed, stress=None, quantity="von_mises", field=Non
 Show the simulated geometry over the original one. The original mesh is drawn as its edges in black, the deformed mesh
 as translucent faces, shaded by the stress from light (lowest) to dark (highest); the range is printed. With the
 field, a **Show field** checkbox in the side panel, off by default, shows the wale direction on the deformed mesh,
-carried there by the deformation of the triangles around each vertex. `scripts/view_simulation.py` runs it on the
-results of `scripts/simulate.py`.
+carried there by the deformation of the triangles around each vertex. `scripts/simulate.py` shows its results with it.
 
 | Parameter | Type | Description |
 |---|---|---|

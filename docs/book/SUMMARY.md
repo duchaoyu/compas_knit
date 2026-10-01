@@ -12,6 +12,7 @@
 * [Pipeline overview](documentation/pipeline.md)
 * [Stripe patterns and singularities](documentation/stripe-patterns.md)
 * [File formats](documentation/file-formats.md)
+* [Validating the simulation: the flat dome](documentation/simulation-validation.md)
 
 ## Tutorials
 
