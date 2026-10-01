@@ -14,6 +14,8 @@ FetchContent_Declare(
   fabsim
   GIT_REPOSITORY https://github.com/duchaoyu/fabsim
   GIT_TAG 15585aa  # the orthotropic StVK membrane, rods
+  # the pressure work was 3 p V, (x0 + x1 + x2) . n / 6 instead of / 18; applied once, skipped when already applied
+  PATCH_COMMAND sh -c "git apply --reverse --check ${CMAKE_CURRENT_SOURCE_DIR}/patches/fabsim_pressure_volume.patch 2>/dev/null || git apply ${CMAKE_CURRENT_SOURCE_DIR}/patches/fabsim_pressure_volume.patch"
 )
 FetchContent_Declare(
   optim

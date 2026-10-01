@@ -1,0 +1,167 @@
+diff --git a/src/OrthotropicStVKElement.cpp b/src/OrthotropicStVKElement.cpp
+index 68469f1..9e650d1 100644
+--- a/src/OrthotropicStVKElement.cpp
++++ b/src/OrthotropicStVKElement.cpp
+@@ -165,7 +165,7 @@ Eigen::MatrixXd OrthotropicStVKElement::local_XY(const Eigen::Ref<const Eigen::V
+       Vector3d totalDisplacement = X.segment<3>(3 * idx(0)) + X.segment<3>(3 * idx(1)) + X.segment<3>(3 * idx(2));
+ 
+ //    Vector3d totalDisplacement = X.segment<3>(0) + X.segment<3>(3) + X.segment<3>(6);
+-      double avgNormalDisplacementArea = totalDisplacement.dot(normal) / 6;
++      double avgNormalDisplacementArea = totalDisplacement.dot(normal) / 18;  // the volume of the tetrahedron with the origin: (x0 + x1 + x2) . n = 3 det(x0, x1, x2)
+ 
+       // Work done by the perpendicular force, work = F * displacement
+ //        double workDoneByPressure = coeff * (forcePerUnitArea * avgNormalDisplacementArea);
+@@ -179,7 +179,7 @@ Eigen::MatrixXd OrthotropicStVKElement::local_XY(const Eigen::Ref<const Eigen::V
+ //      Vector3d normal = e1.cross(e2);
+ //
+ //      Vector3d totalDisplacement = V_local_XY.row(0) + V_local_XY.row(1) + V_local_XY.row(2);
+-//      double avgNormalDisplacementArea = totalDisplacement.dot(normal) / 6;
++//      double avgNormalDisplacementArea = totalDisplacement.dot(normal) / 18;  // the volume of the tetrahedron with the origin: (x0 + x1 + x2) . n = 3 det(x0, x1, x2)
+ //
+ //      // Work done by the perpendicular force, work = F * displacement
+ ////        double workDoneByPressure = coeff * (forcePerUnitArea * avgNormalDisplacementArea);
+@@ -266,25 +266,25 @@ Eigen::MatrixXd OrthotropicStVKElement::local_XY(const Eigen::Ref<const Eigen::V
+       double t17 = t9 + x1_y;
+       double t18 = t10 + x0_z;
+       double t19 = t10 + x1_z;
+-      double t20 = (t12 * t17) / 6.0;
+-      double t21 = (t14 * t15) / 6.0;
+-      double t22 = (t12 * t19) / 6.0;
+-      double t23 = (t14 * t18) / 6.0;
+-      double t24 = (t15 * t19) / 6.0;
+-      double t25 = (t17 * t18) / 6.0;
++      double t20 = (t12 * t17) / 18.0;
++      double t21 = (t14 * t15) / 18.0;
++      double t22 = (t12 * t19) / 18.0;
++      double t23 = (t14 * t18) / 18.0;
++      double t24 = (t15 * t19) / 18.0;
++      double t25 = (t17 * t18) / 18.0;
+       double t26 = -t21;
+       double t27 = -t23;
+       double t28 = -t25;
+ 
+-      pressureGrad(0) = forcePerUnitArea * (t24 + t28 + (t4 * t17) / 6.0 - (t3 * t19) / 6.0);
+-      pressureGrad(1) = -1 * forcePerUnitArea * (t22 + t27 + (t4 * t14) / 6.0 - (t2 * t19) / 6.0);
+-      pressureGrad(2) = forcePerUnitArea * (t20 + t26 + (t3 * t14) / 6.0 - (t2 * t17) / 6.0);
+-      pressureGrad(3) = forcePerUnitArea * (t24 + t28 - (t4 * t15) / 6.0 + (t3 * t18) / 6.0);
+-      pressureGrad(4) = -1 * forcePerUnitArea * (t22 + t27 - (t4 * t12) / 6.0 + (t2 * t18) / 6.0);
+-      pressureGrad(5) = forcePerUnitArea * (t20 + t26 - (t3 * t12) / 6.0 + (t2 * t15) / 6.0);
+-      pressureGrad(6) = forcePerUnitArea * (t24 + t28 + (t4 * t13) / 6.0 - (t3 * t16) / 6.0);
+-      pressureGrad(7) = -1 * forcePerUnitArea * (t22 + t27 + (t4 * t11) / 6.0 - (t2 * t16) / 6.0);
+-      pressureGrad(8) = forcePerUnitArea * (t20 + t26 + (t3 * t11) / 6.0 - (t2 * t13) / 6.0);
++      pressureGrad(0) = forcePerUnitArea * (t24 + t28 + (t4 * t17) / 18.0 - (t3 * t19) / 18.0);
++      pressureGrad(1) = -1 * forcePerUnitArea * (t22 + t27 + (t4 * t14) / 18.0 - (t2 * t19) / 18.0);
++      pressureGrad(2) = forcePerUnitArea * (t20 + t26 + (t3 * t14) / 18.0 - (t2 * t17) / 18.0);
++      pressureGrad(3) = forcePerUnitArea * (t24 + t28 - (t4 * t15) / 18.0 + (t3 * t18) / 18.0);
++      pressureGrad(4) = -1 * forcePerUnitArea * (t22 + t27 - (t4 * t12) / 18.0 + (t2 * t18) / 18.0);
++      pressureGrad(5) = forcePerUnitArea * (t20 + t26 - (t3 * t12) / 18.0 + (t2 * t15) / 18.0);
++      pressureGrad(6) = forcePerUnitArea * (t24 + t28 + (t4 * t13) / 18.0 - (t3 * t16) / 18.0);
++      pressureGrad(7) = -1 * forcePerUnitArea * (t22 + t27 + (t4 * t11) / 18.0 - (t2 * t16) / 18.0);
++      pressureGrad(8) = forcePerUnitArea * (t20 + t26 + (t3 * t11) / 18.0 - (t2 * t13) / 18.0);
+ 
+       grad_flat -= pressureGrad;
+     }
+@@ -357,15 +357,15 @@ Eigen::MatrixXd OrthotropicStVKElement::local_XY(const Eigen::Ref<const Eigen::V
+       double x2_y = X(3 * idx(2) + 1);
+       double x2_z = X(3 * idx(2) + 2);
+ 
+-      double t2 = (forcePerUnitArea * x0_x) / 2.0;
+-      double t3 = (forcePerUnitArea * x0_y) / 2.0;
+-      double t4 = (forcePerUnitArea * x1_x) / 2.0;
+-      double t5 = (forcePerUnitArea * x0_z) / 2.0;
+-      double t6 = (forcePerUnitArea * x1_y) / 2.0;
+-      double t7 = (forcePerUnitArea * x2_x) / 2.0;
+-      double t8 = (forcePerUnitArea * x1_z) / 2.0;
+-      double t9 = (forcePerUnitArea * x2_y) / 2.0;
+-      double t10 = (forcePerUnitArea * x2_z) / 2.0;
++      double t2 = (forcePerUnitArea * x0_x) / 6.0;
++      double t3 = (forcePerUnitArea * x0_y) / 6.0;
++      double t4 = (forcePerUnitArea * x1_x) / 6.0;
++      double t5 = (forcePerUnitArea * x0_z) / 6.0;
++      double t6 = (forcePerUnitArea * x1_y) / 6.0;
++      double t7 = (forcePerUnitArea * x2_x) / 6.0;
++      double t8 = (forcePerUnitArea * x1_z) / 6.0;
++      double t9 = (forcePerUnitArea * x2_y) / 6.0;
++      double t10 = (forcePerUnitArea * x2_z) / 6.0;
+       double t11 = -t2;
+       double t12 = -t3;
+       double t13 = -t4;
+diff --git a/src/StVKElement.cpp b/src/StVKElement.cpp
+index 1219c78..b04ae3f 100644
+--- a/src/StVKElement.cpp
++++ b/src/StVKElement.cpp
+@@ -59,7 +59,7 @@ double StVKElement::energy(const Eigen::Ref<const Eigen::VectorXd> X, double lam
+         Vector3d totalDisplacement = X.segment<3>(3 * idx(0)) + X.segment<3>(3 * idx(1)) + X.segment<3>(3 * idx(2));
+ 
+ //    Vector3d totalDisplacement = X.segment<3>(0) + X.segment<3>(3) + X.segment<3>(6);
+-        double avgNormalDisplacementArea = totalDisplacement.dot(normal) / 6;
++        double avgNormalDisplacementArea = totalDisplacement.dot(normal) / 18;  // the volume of the tetrahedron with the origin: (x0 + x1 + x2) . n = 3 det(x0, x1, x2)
+ 
+         // Work done by the perpendicular force, work = F * displacement
+ //        double workDoneByPressure = coeff * (forcePerUnitArea * avgNormalDisplacementArea);
+@@ -131,25 +131,25 @@ StVKElement::gradient(const Eigen::Ref<const Eigen::VectorXd> X, double lambda,
+     double t17 = t9 + x1_y;
+     double t18 = t10 + x0_z;
+     double t19 = t10 + x1_z;
+-    double t20 = (t12 * t17) / 6.0;
+-    double t21 = (t14 * t15) / 6.0;
+-    double t22 = (t12 * t19) / 6.0;
+-    double t23 = (t14 * t18) / 6.0;
+-    double t24 = (t15 * t19) / 6.0;
+-    double t25 = (t17 * t18) / 6.0;
++    double t20 = (t12 * t17) / 18.0;
++    double t21 = (t14 * t15) / 18.0;
++    double t22 = (t12 * t19) / 18.0;
++    double t23 = (t14 * t18) / 18.0;
++    double t24 = (t15 * t19) / 18.0;
++    double t25 = (t17 * t18) / 18.0;
+     double t26 = -t21;
+     double t27 = -t23;
+     double t28 = -t25;
+ 
+-    pressureGrad(0) = forcePerUnitArea * (t24 + t28 + (t4 * t17) / 6.0 - (t3 * t19) / 6.0);
+-    pressureGrad(1) = -1 * forcePerUnitArea * (t22 + t27 + (t4 * t14) / 6.0 - (t2 * t19) / 6.0);
+-    pressureGrad(2) = forcePerUnitArea * (t20 + t26 + (t3 * t14) / 6.0 - (t2 * t17) / 6.0);
+-    pressureGrad(3) = forcePerUnitArea * (t24 + t28 - (t4 * t15) / 6.0 + (t3 * t18) / 6.0);
+-    pressureGrad(4) = -1 * forcePerUnitArea * (t22 + t27 - (t4 * t12) / 6.0 + (t2 * t18) / 6.0);
+-    pressureGrad(5) = forcePerUnitArea * (t20 + t26 - (t3 * t12) / 6.0 + (t2 * t15) / 6.0);
+-    pressureGrad(6) = forcePerUnitArea * (t24 + t28 + (t4 * t13) / 6.0 - (t3 * t16) / 6.0);
+-    pressureGrad(7) = -1 * forcePerUnitArea * (t22 + t27 + (t4 * t11) / 6.0 - (t2 * t16) / 6.0);
+-    pressureGrad(8) = forcePerUnitArea * (t20 + t26 + (t3 * t11) / 6.0 - (t2 * t13) / 6.0);
++    pressureGrad(0) = forcePerUnitArea * (t24 + t28 + (t4 * t17) / 18.0 - (t3 * t19) / 18.0);
++    pressureGrad(1) = -1 * forcePerUnitArea * (t22 + t27 + (t4 * t14) / 18.0 - (t2 * t19) / 18.0);
++    pressureGrad(2) = forcePerUnitArea * (t20 + t26 + (t3 * t14) / 18.0 - (t2 * t17) / 18.0);
++    pressureGrad(3) = forcePerUnitArea * (t24 + t28 - (t4 * t15) / 18.0 + (t3 * t18) / 18.0);
++    pressureGrad(4) = -1 * forcePerUnitArea * (t22 + t27 - (t4 * t12) / 18.0 + (t2 * t18) / 18.0);
++    pressureGrad(5) = forcePerUnitArea * (t20 + t26 - (t3 * t12) / 18.0 + (t2 * t15) / 18.0);
++    pressureGrad(6) = forcePerUnitArea * (t24 + t28 + (t4 * t13) / 18.0 - (t3 * t16) / 18.0);
++    pressureGrad(7) = -1 * forcePerUnitArea * (t22 + t27 + (t4 * t11) / 18.0 - (t2 * t16) / 18.0);
++    pressureGrad(8) = forcePerUnitArea * (t20 + t26 + (t3 * t11) / 18.0 - (t2 * t13) / 18.0);
+ 
+     grad -= pressureGrad;
+   }
+@@ -209,15 +209,15 @@ StVKElement::hessian(const Eigen::Ref<const Eigen::VectorXd> X, double lambda, d
+       double x2_y = X(3 * idx(2) + 1);
+       double x2_z = X(3 * idx(2) + 2);
+ 
+-      double t2 = (forcePerUnitArea * x0_x) / 2.0;
+-      double t3 = (forcePerUnitArea * x0_y) / 2.0;
+-      double t4 = (forcePerUnitArea * x1_x) / 2.0;
+-      double t5 = (forcePerUnitArea * x0_z) / 2.0;
+-      double t6 = (forcePerUnitArea * x1_y) / 2.0;
+-      double t7 = (forcePerUnitArea * x2_x) / 2.0;
+-      double t8 = (forcePerUnitArea * x1_z) / 2.0;
+-      double t9 = (forcePerUnitArea * x2_y) / 2.0;
+-      double t10 = (forcePerUnitArea * x2_z) / 2.0;
++      double t2 = (forcePerUnitArea * x0_x) / 6.0;
++      double t3 = (forcePerUnitArea * x0_y) / 6.0;
++      double t4 = (forcePerUnitArea * x1_x) / 6.0;
++      double t5 = (forcePerUnitArea * x0_z) / 6.0;
++      double t6 = (forcePerUnitArea * x1_y) / 6.0;
++      double t7 = (forcePerUnitArea * x2_x) / 6.0;
++      double t8 = (forcePerUnitArea * x1_z) / 6.0;
++      double t9 = (forcePerUnitArea * x2_y) / 6.0;
++      double t10 = (forcePerUnitArea * x2_z) / 6.0;
+       double t11 = -t2;
+       double t12 = -t3;
+       double t13 = -t4;
