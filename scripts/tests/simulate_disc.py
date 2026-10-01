@@ -5,6 +5,8 @@
 2. The knit, orthotropic with the moduli of Chapter 5, the wale along x: the crown height, and the shape along the wale
    and along the course.
 3. The same, pre-strained by the stretch factors of the fabrication.
+4. The circular flat mesh of the fabsim examples, data/circular_flat/circular_flat.obj, anchored on its boundary and
+   inflated, E1 = 5000 N/m along the wale (x), E2 = 2500 N/m, nu = 0.198.
 
     python scripts/tests/simulate_disc.py
 
@@ -18,6 +20,7 @@ from scipy.spatial import Delaunay
 from compas_knit import DATA
 from compas_knit.simulation import simulate
 from compas_knit.simulation import write_mesh
+from compas_knit.stripes import read_mesh
 
 # MODIFY -----------------------------------------------------------------
 radius = 0.5  # m
@@ -26,6 +29,8 @@ pressure = 1000.0  # Pa
 
 knit = {"E_wale": 10300.0, "E_course": 13400.0, "nu": 0.58}  # N/m, motif 1, calibrated in Chapter 5
 stretch_wale, stretch_course = 1.1, 1.05
+circular_flat = os.path.join(DATA, "circular_flat", "circular_flat.obj")
+circular_flat_knit = {"E_wale": 5000.0, "E_course": 2500.0, "nu": 0.198}  # N/m, E1 along the field, E2 across
 # -------------------------------------------------------------------------
 
 out_dir = os.path.join(DATA, "tests", "disc", "out")
@@ -48,6 +53,13 @@ def disc_mesh(radius, edge):
     flip = e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0] < 0
     faces[flip] = faces[flip][:, ::-1]
     return np.c_[points, np.zeros(len(points))], faces
+
+
+def boundary_vertices(faces):
+    """The vertices on the boundary: those of the edges of one triangle only."""
+    edges = np.sort(np.r_[faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]], axis=1)
+    edges, count = np.unique(edges, axis=0, return_counts=True)
+    return np.unique(edges[count == 1])
 
 
 def height_along(vertices, rest, axis, r):
@@ -80,4 +92,19 @@ for label, sw, sc in (("no pre-strain", 1.0, 1.0), ("pre-strained {}/{}".format(
     wale, course = height_along(r["vertices"], V, 0, radius / 2), height_along(r["vertices"], V, 1, radius / 2)
     print("   {:22s} crown {:.4f} m; at r = a/2 along the wale {:.4f} m, along the course {:.4f} m; "
           "max stress {:.0f} N/m  ({})".format(label, s["crown_height"], wale, course, s["max_stress"], s["status"]))
+
+# 4. the circular flat mesh, anchored on its boundary
+V, F = read_mesh(circular_flat)
+anchors = boundary_vertices(F)
+a = np.linalg.norm(V[anchors, :2], axis=1).mean()
+field = np.tile([1.0, 0.0, 0.0], (len(V), 1))
+print("4. circular_flat.obj, {} vertices, {} triangles, radius {:.3f} m, {} anchors on the boundary, p = {:.0f} Pa".format(
+    len(V), len(F), a, len(anchors), pressure))
+print("   E_wale {E_wale:.0f} N/m, E_course {E_course:.0f} N/m, nu {nu}, wale along x".format(**circular_flat_knit))
+r = simulate(circular_flat, field, os.path.join(out_dir, "circular_flat"), pressure=pressure, fixed_vertices=anchors,
+             mass=0.0, **circular_flat_knit)
+s = r["summary"]
+wale, course = height_along(r["vertices"], V, 0, a / 2), height_along(r["vertices"], V, 1, a / 2)
+print("   crown {:.4f} m; at r = a/2 along the wale {:.4f} m, along the course {:.4f} m; "
+      "max stress {:.0f} N/m, mean {:.0f} N/m  ({})".format(s["crown_height"], wale, course, s["max_stress"], s["mean_stress"], s["status"]))
 print("results in", out_dir)
