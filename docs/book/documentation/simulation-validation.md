@@ -83,6 +83,24 @@ inflated surface of 1.2227 m2:
 about 1125 N, still holds it up. `scripts/simulate_concrete.py` has the concrete only, without the pressure: cast on the
 flat knit, it stretches it down, a hanging shape.
 
+## A point load
+
+A force on a vertex, fixed in size and direction, `point_loads` in `knit_sim`, put on after the inflation, in steps of
+10, 50 and 100 %, the pressure held, together with any added weight. In CalculiX it is a third step, the same force on
+the same node. E_w 12500, E_c 5000, nu 0.198, the wale along y, 1000 Pa, the pre-tension of 1.001, a load straight down
+on the vertex nearest the centre; the height there, in metres:
+
+| Point load | CalculiX | knit_sim |
+|---|---|---|
+| 50 N | 0.1275 | 0.1275 |
+| 100 N | 0.0943 | 0.0943 |
+| 200 N | 0.0357 | 0.0357 |
+
+A membrane has no bending stiffness, so the dent under a load on a single vertex depends on the size of the mesh: the
+finer the mesh, the deeper and sharper. `scripts/simulate_point_load.py` is the example, 100 N down at the centre of
+the inflated knit of the two-pattern field, stretched 1.1 and 1.1: the height there drops from 0.0741 to 0.0255 m. Its
+`load_radius` shares the load among the vertices within it, the size of what pushes on the knit.
+
 ## The pressure work
 
 The work of the pressure on a triangle is p times the volume of the tetrahedron it makes with the origin,
@@ -111,5 +129,6 @@ only approximates at large strains, so these are not in the comparison.
 python scripts/simulate.py               # the example, and the viewer
 python scripts/simulate_inf_concrete.py  # the same, then a layer of concrete on the inflated knit
 python scripts/simulate_concrete.py      # a layer of concrete only, without the pressure
+python scripts/simulate_point_load.py    # a point load on the inflated knit
 python scripts/tests/simulate_disc.py    # the discs against Hencky, fails if more than 2 % off
 ```

@@ -18,6 +18,8 @@
 //                                                                              its weight its area on that surface
 //                                                                              times this times g, straight down,
 //                                                                              in 10, 50, 100 %, the pressure held
+//                           "point_loads": [{"vertex": v, "force": [fx, fy, fz]}, ...],  N, fixed in direction, put on
+//                                                                              with the added weight
 //                           "stretch_wale": 1.0, "stretch_course": 1.0,        a number, or one per face
 //                           "fixed_vertices": [...],                           (optional; default the whole boundary)
 //                           "cables": [{"path": [v, ...], "EA": 157000, "rest_scale": 1.0}, ...],
@@ -102,10 +104,11 @@ struct Cables
   }
 };
 
-// a weight put on the surface, such as a layer of concrete: fixed nodal loads, straight down
+// loads fixed in size and direction on the vertices: a weight put on the surface, such as a layer of concrete, straight
+// down, and point loads
 struct Weight
 {
-  VectorXd load; // the downward force on each degree of freedom, nonzero only on the z of the membrane vertices
+  VectorXd load; // minus the force on each degree of freedom: the gradient of the energy load . X
 
   double energy(const Ref<const VectorXd>& X) const { return load.dot(X); }
   void gradient(const Ref<const VectorXd>& X, Ref<VectorXd> Y) const { Y += load; }
@@ -317,6 +320,20 @@ int main(int argc, char* argv[])
     const double pressure = p["pressure"];
     const double mass = p.value("mass", 0.001);
     const double addedMass = p.value("added_mass", 0.0);
+    // point loads, fixed forces on vertices
+    VectorXd pointLoads = VectorXd::Zero(3 * nV);
+    for(auto& l: p.value("point_loads", json::array()))
+    {
+      int v = l["vertex"];
+      if(v < 0 || v >= nV)
+        throw std::runtime_error("point_loads has an index out of range: " + std::to_string(v));
+      std::vector<double> force = l["force"];
+      if(force.size() != 3)
+        throw std::runtime_error("a point load needs a force [fx, fy, fz]");
+      for(int k = 0; k < 3; ++k)
+        pointLoads(3 * v + k) += force[k];
+    }
+    const bool afterLoads = addedMass > 0 || pointLoads.squaredNorm() > 0;
     std::vector<double> Ew(nF, p["E_wale"].get<double>()), Ec(nF, p["E_course"].get<double>()),
         nu(nF, p["nu"].get<double>()), thickness(nF, p.value("thickness", 1.0));
 
@@ -395,12 +412,12 @@ int main(int argc, char* argv[])
       for(int k = 0; k < nSteps; ++k)
         steps.push_back(pressure * std::pow(0.01, 1.0 - double(k) / (nSteps - 1)));
     }
-    // the loads, (pressure, fraction of the added weight): the pressure in steps, then the added weight, cast on the
-    // inflated surface
+    // the loads, (pressure, fraction of the added weight and the point loads): the pressure in steps, then the added
+    // weight, cast on the inflated surface, and the point loads
     std::vector<std::pair<double, double>> loads;
     for(double load: steps)
       loads.emplace_back(load, 0.0);
-    if(addedMass > 0)
+    if(afterLoads)
       for(double f: {0.1, 0.5, 1.0})
         loads.emplace_back(pressure, f);
     VectorXd cast; // the inflated surface the added weight is cast on
@@ -419,6 +436,7 @@ int main(int argc, char* argv[])
           cast = x;
         fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, mass, load);
         Weight weight = f > 0 ? castWeight(cast, F, addedMass, f) : Weight{VectorXd::Zero(x.size())};
+        weight.load.head(3 * nV) -= f * pointLoads;
         fsim::CompositeModel model(std::move(membrane), Cables(cables), std::move(weight));
         x = newton(model, x, fixed, regMax, [](const Ref<const VectorXd>) {}, status);
         std::cerr << "pressure " << load << ", added weight " << 100 * f << " %: " << status.status << ", residual "
@@ -445,6 +463,7 @@ int main(int argc, char* argv[])
         fsim::RodCollection rods(Vext, rodNodes, C, N, rodThickness, rodWidth, rodE);
         RodSurfaceContact contact(nV, nRod, kContact, F, x);
         Weight weight = f > 0 ? castWeight(cast, F, addedMass, f) : Weight{VectorXd::Zero(x.size())};
+        weight.load.head(3 * nV) -= f * pointLoads;
         fsim::CompositeModel model(std::move(membrane), Cables(cables), std::move(rods), std::move(contact),
                                    std::move(weight));
         auto update = [&model](const Ref<const VectorXd> X) {

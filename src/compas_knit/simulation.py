@@ -49,6 +49,7 @@ def simulate(
     thickness=1.0,
     mass=0.001,
     added_mass=0.0,
+    point_loads=(),
     load_steps=0,
 ):
     """Simulate the knit under pressure.
@@ -83,6 +84,9 @@ def simulate(
         A layer cast on the inflated knit, kg/m2, such as concrete, density times thickness. Its weight is the area of
         each triangle on the inflated surface times this times g, straight down, fixed once cast; applied after the
         pressure, in 10, 50 and 100 %, the pressure held. The summary gives it as ``added_weight``, in N.
+    point_loads : list[tuple[int, tuple[float, float, float]]], optional
+        ``(vertex, (fx, fy, fz))``: forces in N on vertices, fixed in size and direction, e.g. ``(0, 0, -100)`` down;
+        put on with the added weight, after the pressure.
     load_steps : int, optional
         Number of pressure steps from 1 % to 100 %; 0: 1, 10, 50 and 100 %.
 
@@ -120,6 +124,7 @@ def simulate(
         "thickness": thickness,
         "mass": mass,
         "added_mass": added_mass,
+        "point_loads": [{"vertex": int(v), "force": [float(c) for c in f]} for v, f in point_loads],
         "stretch_wale": list(stretch_wale) if np.ndim(stretch_wale) else stretch_wale,
         "stretch_course": list(stretch_course) if np.ndim(stretch_course) else stretch_course,
         "cables": [dict(c, path=[int(v) for v in c["path"]]) for c in cables],
