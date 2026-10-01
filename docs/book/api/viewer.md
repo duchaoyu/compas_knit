@@ -73,7 +73,7 @@ carried there by the deformation of the triangles around each vertex. `scripts/s
 | `quantity` | `str` | the stress column to shade by: `von_mises`, `principal_1`, `principal_2`, `T_wale_Nm`, `T_course_Nm`, `S11`, `S22`, `S12` |
 | `field` | `str` or array | the directional field of the original mesh, or the path to its file |
 | `show_field` | `bool` | start with the field shown |
-| `view` | `str` | the initial view: `"top"`, `"perspective"`, `"front"` or `"right"` |
+| `view` | `str` | the initial view: `"top"`, a perspective view looking straight down, which can be rotated with the right mouse button, `"perspective"`, `"front"` or `"right"` |
 | `colors` | `tuple[str, str]` | hex colours of the lowest and the highest stress |
 
 **Raises** `ValueError` if the meshes, or the field and the mesh, have a different number of vertices.

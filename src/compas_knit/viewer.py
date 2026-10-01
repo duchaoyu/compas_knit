@@ -225,7 +225,8 @@ def view_simulation(
     show_field : bool, optional
         Start with the field shown.
     view : {"top", "perspective", "front", "right"}, optional
-        The initial view. Switch views in the viewer under View.
+        The initial view. ``"top"`` is a perspective view looking straight down, so it can be rotated with the right
+        mouse button. Switch views in the viewer under View.
     colors : tuple[str, str], optional
         Hex colours of the lowest and the highest stress.
 
@@ -259,7 +260,8 @@ def view_simulation(
     print("largest displacement {:.4g} m".format(np.linalg.norm(xyz - xyz0, axis=1).max()))
 
     viewer = Viewer()
-    viewer.renderer.view = view
+    # the top view is a perspective view looking straight down, so it can still be rotated with the right mouse button
+    viewer.renderer.view = "perspective" if view == "top" else view
     viewer.config.renderer.show_grid = False
 
     viewer.scene.add(before, name="original", show_faces=False, linecolor=Color.black(), linewidth=1)
@@ -301,7 +303,17 @@ def view_simulation(
         viewer.ui.sidedock.show = True
         viewer.ui.sidedock.add(BooleanToggle(state, "show_field", title="Show field", action=toggle))
 
-    _frame(viewer, np.r_[xyz0, xyz], view)
+    points = np.r_[xyz0, xyz]
+    _frame(viewer, points, view)
+    if view == "top":
+        # looking straight down, far enough for the perspective to show the whole plan
+        camera = viewer.renderer.camera
+        camera.rotation.set(0, 0, 0)
+        window = viewer.config.window
+        aspect = (window.width - 300) / window.height
+        span = points.max(axis=0) - points.min(axis=0)
+        half = 0.55 * max(span[0] / aspect, span[1])
+        camera.distance = half / np.tan(np.radians(camera.fov) / 2) + span[2]
     viewer.show()
 
 
