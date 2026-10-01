@@ -70,9 +70,18 @@ orthotropic and isotropic StVK elements of fabsim, and is applied when `knit_sim
 
 ## The current example
 
-`scripts/simulate.py` with E_w 12500, E_c 5000, nu 0.198, the wale along y and the stretch factors 1.1 and 1.1, the
-image above: crown height 0.0728 m, von Mises stress 1344 to 1493 N/m. The pre-strain is a rest shape smaller than the
-mesh, which a thermal contraction in CalculiX only approximates at large strains, so it is not in the comparison.
+`scripts/simulate.py` with E_w 12500, E_c 5000, nu 0.198 and the stretch factors 1.1 and 1.1, at 1000 Pa, with either
+field of the mesh, chosen by `field_name`:
+
+| Field | Crown height (m) | von Mises stress (N/m) |
+|---|---|---|
+| `circular_flat`, the wale along y (the image above) | 0.0728 | 1344 to 1493 |
+| `circular_flat_2part`, the two-pattern disc | 0.0741 | 1286 to 1532 |
+
+The two-pattern field is the per-face field `FDM/data/2part/circle_face_directional_field.txt` of fabsim-example-project,
+averaged onto the vertices; the face directions `knit_sim` makes of it are within 0.5 degrees of the original on
+average, 3.6 at most. The pre-strain is a rest shape smaller than the mesh, which a thermal contraction in CalculiX
+only approximates at large strains, so these are not in the comparison.
 
 ## Run it
 
