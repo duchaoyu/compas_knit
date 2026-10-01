@@ -198,7 +198,7 @@ def view_simulation(
     quantity="von_mises",
     field=None,
     show_field=False,
-    view="perspective",
+    view="top",
     colors=("#dbeafe", "#1e3a8a"),
 ):
     """Show the original mesh and the simulated, deformed one. Blocks until the window is closed.
@@ -224,7 +224,7 @@ def view_simulation(
         the deformed mesh by the deformation of the triangles around each vertex.
     show_field : bool, optional
         Start with the field shown.
-    view : {"perspective", "top", "front", "right"}, optional
+    view : {"top", "perspective", "front", "right"}, optional
         The initial view. Switch views in the viewer under View.
     colors : tuple[str, str], optional
         Hex colours of the lowest and the highest stress.

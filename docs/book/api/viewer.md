@@ -57,7 +57,7 @@ view_field("model.obj", "model_vertex_directional_field.txt")
 
 ```python
 view_simulation(original, deformed, stress=None, quantity="von_mises", field=None, show_field=False,
-                view="perspective", colors=("#dbeafe", "#1e3a8a"))
+                view="top", colors=("#dbeafe", "#1e3a8a"))
 ```
 
 Show the simulated geometry over the original one. The original mesh is drawn as its edges in black, the deformed mesh
@@ -73,7 +73,7 @@ carried there by the deformation of the triangles around each vertex. `scripts/s
 | `quantity` | `str` | the stress column to shade by: `von_mises`, `principal_1`, `principal_2`, `T_wale_Nm`, `T_course_Nm`, `S11`, `S22`, `S12` |
 | `field` | `str` or array | the directional field of the original mesh, or the path to its file |
 | `show_field` | `bool` | start with the field shown |
-| `view` | `str` | the initial view: `"perspective"`, `"top"`, `"front"` or `"right"` |
+| `view` | `str` | the initial view: `"top"`, `"perspective"`, `"front"` or `"right"` |
 | `colors` | `tuple[str, str]` | hex colours of the lowest and the highest stress |
 
 **Raises** `ValueError` if the meshes, or the field and the mesh, have a different number of vertices.
