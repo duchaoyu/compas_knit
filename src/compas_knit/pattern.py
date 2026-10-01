@@ -13,6 +13,7 @@ import pickle
 import numpy as np
 from scipy.spatial import cKDTree
 
+from compas_knit.stripes import break_cycles
 from compas_knit.stripes import order_trajectories
 
 
@@ -52,11 +53,11 @@ def knitting_sequence(links, n):
     Returns
     -------
     tuple[list[int], int]
-        The trajectories in knitting order, and how many times a cycle of links had to be broken: where the links
-        close on themselves, the sequence continues with the trajectory with the most of its neighbours below it
-        already knitted, which is where the knitting needs a seam.
+        The trajectories in knitting order, and how many links were cut where the links close on themselves, the
+        weakest of each cycle, see :func:`compas_knit.stripes.break_cycles`: where the knitting needs a seam.
 
     """
+    links, cut = break_cycles(links, n)
     position, _ = order_trajectories(links, n)
     before = [[] for _ in range(n)]
     after = [[] for _ in range(n)]
@@ -72,7 +73,6 @@ def knitting_sequence(links, n):
     waiting = [len(before[i]) for i in range(n)]
     placed = [False] * n
     sequence = []
-    breaks = 0
     last = None
     while len(sequence) < n:
         # a trajectory the last one leads to, the longest shared first
@@ -83,19 +83,13 @@ def knitting_sequence(links, n):
                 nxt = max(ready)[1]
         if nxt is None:
             ready = [i for i in range(n) if not placed[i] and waiting[i] == 0]
-            if ready:
-                nxt = min(ready, key=lambda i: (due[i], i))
-            else:
-                # a cycle: continue where the most of the neighbours below are knitted
-                rest = [i for i in range(n) if not placed[i]]
-                nxt = max(rest, key=lambda i: (len(before[i]) - waiting[i], -position[i], -i))
-                breaks += 1
+            nxt = min(ready, key=lambda i: (due[i], i))
         placed[nxt] = True
         sequence.append(nxt)
         for _, b in after[nxt]:
             waiting[b] -= 1
         last = nxt
-    return sequence, breaks
+    return sequence, len(cut)
 
 
 def course_directions(mesh, field):
@@ -416,7 +410,7 @@ def knitting_pattern(stitches, links, mesh=None, field=None, alignment=None, fea
         earlier scripts. ``sequence``: the trajectories in knitting order, ``rows[i]``: the first row of
         trajectory i, ``offsets[i]``: the column offset of each of its stitches from the stitch below it,
         ``aligned``: the aligned stitches, as (trajectory, stitch index), ``colored``: the coloured stitches of each
-        feature, ``breaks``: the number of cycles broken.
+        feature, ``breaks``: the number of links cut where they closed on themselves, the weakest of each cycle.
 
     """
     stitches = [[list(p) for p in (s.points if hasattr(s, "points") else s)] for s in stitches]
@@ -430,7 +424,7 @@ def knitting_pattern(stitches, links, mesh=None, field=None, alignment=None, fea
         )
     sequence, breaks = knitting_sequence(links, len(stitches))
     if breaks:
-        print("warning: the links close on themselves in {} places; the sequence breaks them there, "
+        print("warning: the links close on themselves; {} links cut, the weakest of each cycle, "
               "which is where the knitting needs a seam".format(breaks))
 
     # the stitches of the features: nearest to each point, and to the samples of each line, finer than a stitch

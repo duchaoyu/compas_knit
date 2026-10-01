@@ -36,7 +36,7 @@ a wale line, and the rest follow.
 * `sequence` — the trajectories in knitting order; `rows[i]` — the first row of trajectory `i`
 * `offsets[i]` — the column offset of each stitch of trajectory `i` from the stitch below it, 0 where they line up
 * `aligned` — the aligned stitches, as (trajectory, stitch index); `colored` — the coloured stitches of each feature
-* `breaks` — how many cycles of links were broken, where the knitting needs a seam
+* `breaks` — how many links were cut where they closed on themselves, the weakest of each cycle, where the knitting needs a seam
 
 **Raises** `ValueError` if trajectories are closed rings, courses knitted in the round, which need a seam.
 

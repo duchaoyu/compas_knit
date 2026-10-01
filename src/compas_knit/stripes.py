@@ -21,7 +21,8 @@ from compas.geometry import Polyline
 from compas_knit import HOME
 
 
-__all__ = ["generate_stripes", "check_trajectories", "order_trajectories", "read_trajectories", "read_neighbours", "read_singularities", "read_mesh"]
+__all__ = [
+    "generate_stripes", "check_trajectories", "break_cycles", "order_trajectories", "read_trajectories", "read_neighbours", "read_singularities", "read_mesh"]
 
 
 STRIPES_EXE = os.environ.get("COMPAS_KNIT_STRIPES", os.path.join(HOME, "src", "cpp_stripes", "build", "stripes"))
@@ -257,11 +258,53 @@ def read_neighbours(path):
     return links
 
 
+def break_cycles(links, n):
+    """Cut the links that close on themselves, the weakest first.
+
+    Where the links between neighbouring trajectories form a cycle, for instance among the short trajectories around
+    a singularity, or courses running around a pole, there is no first or last. In each cycle the link with the
+    fewest shared edges, where the trajectories barely touch, is cut, until there are no cycles; that is where the
+    knitting needs a seam.
+
+    Parameters
+    ----------
+    links : list[tuple[int, int, int]]
+        As returned by :func:`read_neighbours`.
+    n : int
+        The number of trajectories.
+
+    Returns
+    -------
+    tuple[list[tuple[int, int, int]], list[tuple[int, int, int]]]
+        The links kept, without cycles, and the links cut.
+
+    """
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    kept = list(links)
+    cut = []
+    while kept:
+        graph = csr_matrix(([1] * len(kept), ([a for a, _, _ in kept], [b for _, b, _ in kept])), shape=(n, n))
+        _, component = connected_components(graph, directed=True, connection="strong")
+        weakest = {}
+        for k, (a, b, edges) in enumerate(kept):
+            c = component[a]
+            if a != b and c == component[b] and (c not in weakest or edges < kept[weakest[c]][2]):
+                weakest[c] = k
+        if not weakest:
+            break
+        cut += [kept[k] for k in weakest.values()]
+        kept = [link for k, link in enumerate(kept) if k not in set(weakest.values())]
+    return kept, cut
+
+
 def order_trajectories(links, n):
     """Position of each trajectory in the knitting order, from the links between neighbours.
 
     A trajectory's position is the length of the longest chain of links leading to it, so every trajectory
     comes after all the trajectories linked before it. Short rows share positions with the courses beside them.
+    Where the links close on themselves, the weakest link of each cycle is cut first, see :func:`break_cycles`.
 
     Parameters
     ----------
@@ -273,45 +316,26 @@ def order_trajectories(links, n):
     Returns
     -------
     tuple[list[int], list[int]]
-        The position of each trajectory, from 0, and the trajectories on a cycle of links, or after one.
-        Where the links close on themselves, for instance where the courses run around a pole, there is no
-        first or last and the knitting needs a seam; these trajectories get the position after the last
-        one leading into them.
+        The position of each trajectory, from 0, and the trajectories that were on a cycle of links, where the
+        knitting needs a seam.
 
     """
+    kept, cut = break_cycles(links, n)
     after = [[] for _ in range(n)]
-    before = [[] for _ in range(n)]
-    for a, b, _ in links:
+    waiting = [0] * n
+    for a, b, _ in kept:
         after[a].append(b)
-        before[b].append(a)
-    waiting = [len(before[i]) for i in range(n)]
+        waiting[b] += 1
     position = [0] * n
     queue = [i for i in range(n) if waiting[i] == 0]
-    done = [False] * n
     while queue:
         a = queue.pop()
-        done[a] = True
         for b in after[a]:
             position[b] = max(position[b], position[a] + 1)
             waiting[b] -= 1
             if waiting[b] == 0:
                 queue.append(b)
-    cyclic = [i for i in range(n) if not done[i]]
-    # on a cycle, place each trajectory once, after the placed trajectories leading into it, in the order they are reached
-    reached = collections.deque(i for i in cyclic if any(done[a] for a in before[i]))
-    unreached = list(reversed(cyclic))
-    while reached or unreached:
-        if not reached:
-            i = unreached.pop()
-            if done[i]:
-                continue
-            reached.append(i)  # a cycle nothing leads into: start it anywhere
-        i = reached.popleft()
-        if done[i]:
-            continue
-        position[i] = max([position[a] + 1 for a in before[i] if done[a]] or [0])
-        done[i] = True
-        reached.extend(b for b in after[i] if not done[b])
+    cyclic = sorted({i for a, b, _ in cut for i in (a, b)})
     return position, cyclic
 
 

@@ -66,10 +66,19 @@ spacing. Such a segment is reported too, and is correct.
 order_trajectories(links, n)
 ```
 
-Position of each trajectory in the knitting order: the length of the longest chain of links leading to it.
-**Returns** `(position, cyclic)` — the position of each of the `n` trajectories, from 0, and the trajectories on or
-after a cycle of links. Where the links close on themselves, for instance where the courses run around a pole,
-there is no first or last and the knitting needs a seam.
+Position of each trajectory in the knitting order: the length of the longest chain of links leading to it, after
+cutting the cycles with [`break_cycles`](#break_cycles). **Returns** `(position, cyclic)` — the position of each of
+the `n` trajectories, from 0, and the trajectories that were on a cycle of links.
+
+## break\_cycles
+
+```python
+break_cycles(links, n)
+```
+
+Where the links close on themselves, there is no first or last: among the short trajectories around a singularity,
+or courses running around a pole. In each cycle the link with the fewest shared edges, where the trajectories barely
+touch, is cut, until there are none; that is where the knitting needs a seam. **Returns** `(kept, cut)`, the links.
 
 ## read\_mesh
 
