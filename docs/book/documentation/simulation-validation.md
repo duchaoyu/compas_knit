@@ -61,6 +61,24 @@ and is 0.8 % above both; on a finer disc, `scripts/tests/simulate_disc.py`, `kni
 | edge 0.04 m | 1015 | 0.1219 | 0.1220 (+0.06 %) |
 | edge 0.02 m | 3929 | 0.1219 | 0.1219 (+0.00 %) |
 
+## A layer of concrete
+
+A thin layer of concrete on the inflated knit is a weight per unit area, its density times its thickness,
+`added_mass` in `knit_sim`. It is put on after the inflation, in steps of 10, 50 and 100 %, the pressure held, as the
+concrete is cast on the inflated formwork. It acts downwards on the deformed surface. In CalculiX it is a third step,
+a gravity load on the membrane given the same mass per unit area. E_w 12500, E_c 5000, nu 0.198, the wale along y,
+1000 Pa, the pre-tension of 1.001, concrete of 2400 kg/m3:
+
+| Concrete | kg/m2 | Pa | CalculiX | knit_sim |
+|---|---|---|---|---|
+| none | 0 | 0 | 0.1684 | 0.1684 |
+| 5 mm | 12 | 118 | 0.1617 | 0.1617 |
+| 10 mm | 24 | 235 | 0.1544 | 0.1544 |
+| 20 mm | 48 | 470 | 0.1370 | 0.1371 |
+
+`scripts/simulate_concrete.py` is the example: the two-pattern field and the stretch factors 1.1 and 1.1, with 10 mm
+of concrete, lowers the crown from 0.0741 to 0.0615 m.
+
 ## The pressure work
 
 The work of the pressure on a triangle is p times the volume of the tetrahedron it makes with the origin,
@@ -87,5 +105,6 @@ only approximates at large strains, so these are not in the comparison.
 
 ```
 python scripts/simulate.py               # the example, and the viewer
+python scripts/simulate_concrete.py      # the same with a layer of concrete
 python scripts/tests/simulate_disc.py    # the discs against Hencky, fails if more than 2 % off
 ```

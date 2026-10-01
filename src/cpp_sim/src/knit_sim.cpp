@@ -3,7 +3,8 @@
 // The knit is an orthotropic Saint-Venant-Kirchhoff membrane whose material frame comes from the same directional
 // field the knitting trajectories are extracted from, so the solver assumes the directions the machine knits. It is
 // pre-strained by the stretch factors of the fabrication (Eq. 6.6), and solved together with sliding cables and
-// bending-active rods held on the surface by a penalty, under a pressure load.
+// bending-active rods held on the surface by a penalty, under a pressure load, and then, inflated, an added weight,
+// such as a layer of concrete.
 //
 // usage: knit_sim <mesh.obj|.off> <vertex_field.txt> <params.json> <out_prefix>
 //
@@ -11,8 +12,10 @@
 //   vertex_field.txt      the wale direction per vertex, "x y z" per line in vertex order, as read by stripes
 //   params.json           {
 //                           "E_wale": 10300, "E_course": 13400, "nu": 0.58,   membrane moduli (N/m) and Poisson ratio
-//                           "thickness": 1.0, "mass": 0.001,                   (optional)
+//                           "thickness": 1.0, "mass": 0.001,                   (optional) mass: of the knit, kg/m2
 //                           "pressure": 1000,                                  Pa
+//                           "added_mass": 0,                                   kg/m2, put on after the inflation,
+//                                                                              in 10, 50, 100 %, the pressure held
 //                           "stretch_wale": 1.0, "stretch_course": 1.0,        a number, or one per face
 //                           "fixed_vertices": [...],                           (optional; default the whole boundary)
 //                           "cables": [{"path": [v, ...], "EA": 157000, "rest_scale": 1.0}, ...],
@@ -284,6 +287,7 @@ int main(int argc, char* argv[])
         throw std::runtime_error(std::string("params.json needs ") + key);
     const double pressure = p["pressure"];
     const double mass = p.value("mass", 0.001);
+    const double addedMass = p.value("added_mass", 0.0);
     std::vector<double> Ew(nF, p["E_wale"].get<double>()), Ec(nF, p["E_course"].get<double>()),
         nu(nF, p["nu"].get<double>()), thickness(nF, p.value("thickness", 1.0));
 
@@ -362,6 +366,13 @@ int main(int argc, char* argv[])
       for(int k = 0; k < nSteps; ++k)
         steps.push_back(pressure * std::pow(0.01, 1.0 - double(k) / (nSteps - 1)));
     }
+    // the loads, (pressure, mass): the pressure in steps, then the added weight, the structure already inflated
+    std::vector<std::pair<double, double>> loads;
+    for(double load: steps)
+      loads.emplace_back(load, mass);
+    if(addedMass > 0)
+      for(double f: {0.1, 0.5, 1.0})
+        loads.emplace_back(pressure, mass + f * addedMass);
     const double regMax = p.value("newton_reg_max", 0.0);
     const double kContact = p.value("contact_stiffness", 1e5);
 
@@ -371,12 +382,13 @@ int main(int argc, char* argv[])
     if(rodPaths.empty())
     {
       x = Map<const VectorXd>(V0.data(), 3 * nV);
-      for(double load: steps)
+      for(auto [load, m]: loads)
       {
-        fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, mass, load);
+        fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, m, load);
         fsim::CompositeModel model(std::move(membrane), Cables(cables));
         x = newton(model, x, fixed, regMax, [](const Ref<const VectorXd>) {}, status);
-        std::cerr << "pressure " << load << ": " << status.status << ", residual " << status.residual << "\n";
+        std::cerr << "pressure " << load << ", mass " << m << ": " << status.status << ", residual " << status.residual
+                  << "\n";
       }
     }
     else
@@ -391,9 +403,9 @@ int main(int argc, char* argv[])
       fsim::RodCollection probe(Vext, rodNodes, C, N, rodThickness, rodWidth, rodE);
       x = VectorXd::Zero(3 * (nV + nRod) + probe.nbEdges());
       x.head(3 * (nV + nRod)) = Map<const VectorXd>(Vext.data(), 3 * (nV + nRod));
-      for(double load: steps)
+      for(auto [load, m]: loads)
       {
-        fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, mass, load);
+        fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, m, load);
         fsim::RodCollection rods(Vext, rodNodes, C, N, rodThickness, rodWidth, rodE);
         RodSurfaceContact contact(nV, nRod, kContact, F, x);
         fsim::CompositeModel model(std::move(membrane), Cables(cables), std::move(rods), std::move(contact));
@@ -402,7 +414,8 @@ int main(int argc, char* argv[])
           model.getModel<3>().updateContacts(X);
         };
         x = newton(model, x, fixed, regMax, update, status);
-        std::cerr << "pressure " << load << ": " << status.status << ", residual " << status.residual << "\n";
+        std::cerr << "pressure " << load << ", mass " << m << ": " << status.status << ", residual " << status.residual
+                  << "\n";
       }
     }
 
@@ -431,7 +444,7 @@ int main(int argc, char* argv[])
         out << "\n";
       }
     }
-    fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, mass, pressure);
+    fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, mass + addedMass, pressure);
     auto stress = computeElementStresses(membrane, x.head(3 * nV), 0, 0, 0, 0);
     saveStressCSV(prefix + "_stress.csv", stress);
 

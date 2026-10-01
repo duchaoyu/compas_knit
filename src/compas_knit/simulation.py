@@ -48,6 +48,7 @@ def simulate(
     rods=(),
     thickness=1.0,
     mass=0.001,
+    added_mass=0.0,
     load_steps=0,
 ):
     """Simulate the knit under pressure.
@@ -77,7 +78,10 @@ def simulate(
     thickness : float, optional
         Thickness of the membrane, 1 when the moduli are per unit length.
     mass : float, optional
-        Mass per unit area, for the self-weight.
+        Mass of the knit per unit area, kg/m2, for its self-weight.
+    added_mass : float, optional
+        A weight put on the inflated knit, kg/m2, such as a layer of concrete, density times thickness: applied after
+        the pressure, in 10, 50 and 100 %, the pressure held.
     load_steps : int, optional
         Number of pressure steps from 1 % to 100 %; 0: 1, 10, 50 and 100 %.
 
@@ -114,6 +118,7 @@ def simulate(
         "pressure": pressure,
         "thickness": thickness,
         "mass": mass,
+        "added_mass": added_mass,
         "stretch_wale": list(stretch_wale) if np.ndim(stretch_wale) else stretch_wale,
         "stretch_course": list(stretch_course) if np.ndim(stretch_course) else stretch_course,
         "cables": [dict(c, path=[int(v) for v in c["path"]]) for c in cables],
