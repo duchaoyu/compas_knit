@@ -14,7 +14,9 @@
 //                           "E_wale": 10300, "E_course": 13400, "nu": 0.58,   membrane moduli (N/m) and Poisson ratio
 //                           "thickness": 1.0, "mass": 0.001,                   (optional) mass: of the knit, kg/m2
 //                           "pressure": 1000,                                  Pa
-//                           "added_mass": 0,                                   kg/m2, put on after the inflation,
+//                           "added_mass": 0,                                   kg/m2, cast on the inflated surface,
+//                                                                              its weight its area on that surface
+//                                                                              times this times g, straight down,
 //                                                                              in 10, 50, 100 %, the pressure held
 //                           "stretch_wale": 1.0, "stretch_course": 1.0,        a number, or one per face
 //                           "fixed_vertices": [...],                           (optional; default the whole boundary)
@@ -99,6 +101,33 @@ struct Cables
     return H;
   }
 };
+
+// a weight put on the surface, such as a layer of concrete: fixed nodal loads, straight down
+struct Weight
+{
+  VectorXd load; // the downward force on each degree of freedom, nonzero only on the z of the membrane vertices
+
+  double energy(const Ref<const VectorXd>& X) const { return load.dot(X); }
+  void gradient(const Ref<const VectorXd>& X, Ref<VectorXd> Y) const { Y += load; }
+  VectorXd gradient(const Ref<const VectorXd>& X) const { return load; }
+  std::vector<Triplet<double>> hessianTriplets(const Ref<const VectorXd>& X) const { return {}; }
+  SparseMatrix<double> hessian(const Ref<const VectorXd>& X) const { return SparseMatrix<double>(X.size(), X.size()); }
+};
+
+// the weight of a mass per unit area cast on the surface x: each triangle's area on x times the mass times g, a third
+// on each corner; the mass is then fixed, it does not change as the surface deforms further
+Weight castWeight(const VectorXd& x, const fsim::Mat3<int>& F, double massPerArea, double scale)
+{
+  Weight w{VectorXd::Zero(x.size())};
+  for(int f = 0; f < F.rows(); ++f)
+  {
+    Vector3d a = x.segment<3>(3 * F(f, 0)), b = x.segment<3>(3 * F(f, 1)), c = x.segment<3>(3 * F(f, 2));
+    double G = 0.5 * (b - a).cross(c - a).norm() * massPerArea * 9.8 * scale;
+    for(int k = 0; k < 3; ++k)
+      w.load(3 * F(f, k) + 2) += G / 3;
+  }
+  return w;
+}
 
 void readMesh(const std::string& path, fsim::Mat3<double>& V, fsim::Mat3<int>& F)
 {
@@ -366,13 +395,15 @@ int main(int argc, char* argv[])
       for(int k = 0; k < nSteps; ++k)
         steps.push_back(pressure * std::pow(0.01, 1.0 - double(k) / (nSteps - 1)));
     }
-    // the loads, (pressure, mass): the pressure in steps, then the added weight, the structure already inflated
+    // the loads, (pressure, fraction of the added weight): the pressure in steps, then the added weight, cast on the
+    // inflated surface
     std::vector<std::pair<double, double>> loads;
     for(double load: steps)
-      loads.emplace_back(load, mass);
+      loads.emplace_back(load, 0.0);
     if(addedMass > 0)
       for(double f: {0.1, 0.5, 1.0})
-        loads.emplace_back(pressure, mass + f * addedMass);
+        loads.emplace_back(pressure, f);
+    VectorXd cast; // the inflated surface the added weight is cast on
     const double regMax = p.value("newton_reg_max", 0.0);
     const double kContact = p.value("contact_stiffness", 1e5);
 
@@ -382,13 +413,16 @@ int main(int argc, char* argv[])
     if(rodPaths.empty())
     {
       x = Map<const VectorXd>(V0.data(), 3 * nV);
-      for(auto [load, m]: loads)
+      for(auto [load, f]: loads)
       {
-        fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, m, load);
-        fsim::CompositeModel model(std::move(membrane), Cables(cables));
+        if(f > 0 && !cast.size())
+          cast = x;
+        fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, mass, load);
+        Weight weight = f > 0 ? castWeight(cast, F, addedMass, f) : Weight{VectorXd::Zero(x.size())};
+        fsim::CompositeModel model(std::move(membrane), Cables(cables), std::move(weight));
         x = newton(model, x, fixed, regMax, [](const Ref<const VectorXd>) {}, status);
-        std::cerr << "pressure " << load << ", mass " << m << ": " << status.status << ", residual " << status.residual
-                  << "\n";
+        std::cerr << "pressure " << load << ", added weight " << 100 * f << " %: " << status.status << ", residual "
+                  << status.residual << "\n";
       }
     }
     else
@@ -403,19 +437,23 @@ int main(int argc, char* argv[])
       fsim::RodCollection probe(Vext, rodNodes, C, N, rodThickness, rodWidth, rodE);
       x = VectorXd::Zero(3 * (nV + nRod) + probe.nbEdges());
       x.head(3 * (nV + nRod)) = Map<const VectorXd>(Vext.data(), 3 * (nV + nRod));
-      for(auto [load, m]: loads)
+      for(auto [load, f]: loads)
       {
-        fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, m, load);
+        if(f > 0 && !cast.size())
+          cast = x;
+        fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, mass, load);
         fsim::RodCollection rods(Vext, rodNodes, C, N, rodThickness, rodWidth, rodE);
         RodSurfaceContact contact(nV, nRod, kContact, F, x);
-        fsim::CompositeModel model(std::move(membrane), Cables(cables), std::move(rods), std::move(contact));
+        Weight weight = f > 0 ? castWeight(cast, F, addedMass, f) : Weight{VectorXd::Zero(x.size())};
+        fsim::CompositeModel model(std::move(membrane), Cables(cables), std::move(rods), std::move(contact),
+                                   std::move(weight));
         auto update = [&model](const Ref<const VectorXd> X) {
           model.getModel<2>().updateProperties(X);
           model.getModel<3>().updateContacts(X);
         };
         x = newton(model, x, fixed, regMax, update, status);
-        std::cerr << "pressure " << load << ", mass " << m << ": " << status.status << ", residual " << status.residual
-                  << "\n";
+        std::cerr << "pressure " << load << ", added weight " << 100 * f << " %: " << status.status << ", residual "
+                  << status.residual << "\n";
       }
     }
 
@@ -444,7 +482,7 @@ int main(int argc, char* argv[])
         out << "\n";
       }
     }
-    fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, mass + addedMass, pressure);
+    fsim::OrthotropicStVKMembrane membrane(rest, F, thickness, Ew, Ec, nu, wale, mass, pressure);
     auto stress = computeElementStresses(membrane, x.head(3 * nV), 0, 0, 0, 0);
     saveStressCSV(prefix + "_stress.csv", stress);
 
@@ -470,7 +508,8 @@ int main(int argc, char* argv[])
                     {"crown_height", crown},           {"max_stress", maxStress},
                     {"mean_stress", meanStress},       {"cable_tensions", tensions},
                     {"vertices", nV},                  {"faces", nF},
-                    {"cables", cables.cables.size()}, {"rods", rodPaths.size()}};
+                    {"cables", cables.cables.size()}, {"rods", rodPaths.size()},
+                    {"added_weight", cast.size() ? castWeight(cast, F, addedMass, 1.0).load.sum() : 0.0}};
     std::ofstream(prefix + "_summary.json") << summary.dump(2) << "\n";
     std::cerr << "status " << status.status << ", crown " << crown << "\n";
     return status.status == "success" ? 0 : 2;

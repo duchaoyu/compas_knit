@@ -80,8 +80,9 @@ def simulate(
     mass : float, optional
         Mass of the knit per unit area, kg/m2, for its self-weight.
     added_mass : float, optional
-        A weight put on the inflated knit, kg/m2, such as a layer of concrete, density times thickness: applied after
-        the pressure, in 10, 50 and 100 %, the pressure held.
+        A layer cast on the inflated knit, kg/m2, such as concrete, density times thickness. Its weight is the area of
+        each triangle on the inflated surface times this times g, straight down, fixed once cast; applied after the
+        pressure, in 10, 50 and 100 %, the pressure held. The summary gives it as ``added_weight``, in N.
     load_steps : int, optional
         Number of pressure steps from 1 % to 100 %; 0: 1, 10, 50 and 100 %.
 

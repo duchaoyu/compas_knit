@@ -1,8 +1,8 @@
 """Simulation: inflate a knit membrane, then cast a thin layer of concrete on it (Section 6.3).
 
 The circular flat mesh, anchored on its boundary, inflated by a pressure as in `scripts/simulate.py`; then, the pressure
-held, the weight of a layer of concrete, density times thickness per unit area, acting downwards, put on in steps of
-10, 50 and 100 %. The knit is simulated with and without the concrete, and the one with is shown, shaded by the stress.
+held, a layer of concrete cast on the inflated surface: its weight G = area x density x thickness x g, the area of each
+triangle on the inflated surface, acting straight down, put on in steps of 10, 50 and 100 %. The knit is simulated with and without the concrete, and the one with is shown, shaded by the stress.
 Writes `<field_name>_concrete_*` to `<folder>/out/`.
 
 Edit the inputs below and run
@@ -58,8 +58,8 @@ for label, added in (("inflated", 0.0), ("with concrete", concrete)):
     r = simulate(mesh, field, out, E_wale, E_course, nu, pressure, stretch_wale=stretch_wale, stretch_course=stretch_course,
                  fixed_vertices=anchors, mass=0.0, added_mass=added)
     s = r["summary"]
-    print("{:14s} crown height {:.4f} m, max stress {:.0f} N/m, mean stress {:.0f} N/m ({})".format(
-        label, s["crown_height"], s["max_stress"], s["mean_stress"], s["status"]))
+    print("{:14s} crown height {:.4f} m, max stress {:.0f} N/m, mean stress {:.0f} N/m, concrete {:.0f} N ({})".format(
+        label, s["crown_height"], s["max_stress"], s["mean_stress"], s["added_weight"], s["status"]))
     results[label] = (out, r)
 
 drop = results["inflated"][1]["vertices"][:, 2] - results["with concrete"][1]["vertices"][:, 2]

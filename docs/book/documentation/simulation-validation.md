@@ -63,21 +63,23 @@ and is 0.8 % above both; on a finer disc, `scripts/tests/simulate_disc.py`, `kni
 
 ## A layer of concrete
 
-A thin layer of concrete on the inflated knit is a weight per unit area, its density times its thickness,
-`added_mass` in `knit_sim`. It is put on after the inflation, in steps of 10, 50 and 100 %, the pressure held, as the
-concrete is cast on the inflated formwork. It acts downwards on the deformed surface. In CalculiX it is a third step,
-a gravity load on the membrane given the same mass per unit area. E_w 12500, E_c 5000, nu 0.198, the wale along y,
-1000 Pa, the pre-tension of 1.001, concrete of 2400 kg/m3:
+A thin layer of concrete is cast on the inflated knit, `added_mass` in `knit_sim`, its density times its thickness per
+unit area. Its weight is G = area x density x thickness x g, the area of each triangle on the inflated surface, the
+surface the concrete is cast on, a third on each corner, acting straight down. Once cast its mass is fixed: it does not
+change as the knit deforms further under it. It is put on after the inflation, in steps of 10, 50 and 100 %, the
+pressure held. In CalculiX it is a third step, the same nodal forces, from the area of the inflated surface.
+E_w 12500, E_c 5000, nu 0.198, the wale along y, 1000 Pa, the pre-tension of 1.001, concrete of 2400 kg/m3, on an
+inflated surface of 1.2227 m2:
 
-| Concrete | kg/m2 | Pa | CalculiX | knit_sim |
+| Concrete | kg/m2 | G (N) | CalculiX | knit_sim |
 |---|---|---|---|---|
 | none | 0 | 0 | 0.1684 | 0.1684 |
-| 5 mm | 12 | 118 | 0.1617 | 0.1617 |
-| 10 mm | 24 | 235 | 0.1544 | 0.1544 |
-| 20 mm | 48 | 470 | 0.1370 | 0.1371 |
+| 5 mm | 12 | 143.8 | 0.1609 | 0.1609 |
+| 10 mm | 24 | 287.6 | 0.1526 | 0.1526 |
+| 20 mm | 48 | 575.2 | 0.1324 | 0.1324 |
 
 `scripts/simulate_concrete.py` is the example: the two-pattern field and the stretch factors 1.1 and 1.1, with 10 mm
-of concrete, lowers the crown from 0.0741 to 0.0615 m.
+of concrete, 268 N, lowers the crown from 0.0741 to 0.0584 m.
 
 ## The pressure work
 
