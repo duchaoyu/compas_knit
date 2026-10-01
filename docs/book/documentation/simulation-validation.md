@@ -97,9 +97,10 @@ on the vertex nearest the centre; the height there, in metres:
 | 200 N | 0.0357 | 0.0357 |
 
 A membrane has no bending stiffness, so the dent under a load on a single vertex depends on the size of the mesh: the
-finer the mesh, the deeper and sharper. `scripts/simulate_point_load.py` is the example, 100 N down at the centre of
-the inflated knit of the two-pattern field, stretched 1.1 and 1.1: the height there drops from 0.0741 to 0.0255 m. Its
-`load_radius` shares the load among the vertices within it, the size of what pushes on the knit.
+finer the mesh, the deeper and sharper. `scripts/simulate_point_load.py` is the example, without pressure: 100 N down
+at the centre of the flat knit of the two-pattern field, stretched 1.1 and 1.1, pulls it down to -0.0513 m there. Its
+`load_radius` shares the load among the vertices within it, the size of what pushes on the knit. The viewer draws the
+load as a red line, on the flat and on the simulated knit.
 
 ## The pressure work
 
@@ -129,6 +130,6 @@ only approximates at large strains, so these are not in the comparison.
 python scripts/simulate.py               # the example, and the viewer
 python scripts/simulate_inf_concrete.py  # the same, then a layer of concrete on the inflated knit
 python scripts/simulate_concrete.py      # a layer of concrete only, without the pressure
-python scripts/simulate_point_load.py    # a point load on the inflated knit
+python scripts/simulate_point_load.py    # a point load on the flat knit, without the pressure
 python scripts/tests/simulate_disc.py    # the discs against Hencky, fails if more than 2 % off
 ```

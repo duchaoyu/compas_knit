@@ -198,6 +198,7 @@ def view_simulation(
     quantity="von_mises",
     field=None,
     show_field=False,
+    loads=None,
     view="top",
     colors=("#dbeafe", "#1e3a8a"),
 ):
@@ -224,6 +225,10 @@ def view_simulation(
         the deformed mesh by the deformation of the triangles around each vertex.
     show_field : bool, optional
         Start with the field shown.
+    loads : list[tuple[int, tuple[float, float, float]]], optional
+        Point loads, ``(vertex, (fx, fy, fz))`` as given to :func:`compas_knit.simulation.simulate`, each drawn as a red
+        line along its force, ending at the vertex, on the original and on the deformed mesh; the largest a fifth of
+        the size of the mesh.
     view : {"top", "perspective", "front", "right"}, optional
         The initial view. ``"top"`` is a perspective view looking straight down, so it can be rotated with the right
         mouse button. Switch views in the viewer under View.
@@ -302,6 +307,14 @@ def view_simulation(
 
         viewer.ui.sidedock.show = True
         viewer.ui.sidedock.add(BooleanToggle(state, "show_field", title="Show field", action=toggle))
+
+    if loads:
+        forces = np.array([np.asarray(f, dtype=float) for _, f in loads])
+        span = (np.r_[xyz0, xyz].max(axis=0) - np.r_[xyz0, xyz].min(axis=0)).max()
+        scale = 0.2 * span / max(np.linalg.norm(forces, axis=1).max(), 1e-12)
+        for label, surface in (("load (original)", xyz0), ("load", xyz)):
+            lines = [Line(surface[v] - scale * f, surface[v]) for (v, _), f in zip(loads, forces)]
+            viewer.scene.add(Collection(lines), name=label, linecolor=Color.from_hex("#c0392b"), linewidth=4)
 
     points = np.r_[xyz0, xyz]
     _frame(viewer, points, view)

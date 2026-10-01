@@ -1,10 +1,11 @@
-"""Simulation: inflate a knit membrane, then put a point load on it (Section 6.3).
+"""Simulation: a point load on a knit membrane (Section 6.3).
 
-The circular flat mesh, anchored on its boundary, inflated by a pressure as in `scripts/simulate.py`; then, the pressure
-held, a force at a point, fixed in size and direction, put on in steps of 10, 50 and 100 %. The force goes to the vertex
-nearest the point, or is shared equally by the vertices within `load_radius` of it. A membrane has no bending
+The circular flat mesh, anchored on its boundary, pre-strained by the stretch factors, without pressure, and a force at
+a point, fixed in size and direction, put on in steps of 10, 50 and 100 %. The force goes to the vertex nearest the
+point, or is shared equally by the vertices within `load_radius` of it. A membrane has no bending
 stiffness, so under a load on a single vertex the dent depends on the size of the mesh; a radius, the size of what
-pushes on the knit, makes it independent of it. Writes `<field_name>_point_load_*` to `<folder>/out/`.
+pushes on the knit, makes it independent of it. Writes `<field_name>_point_load_*` to `<folder>/out/`, and shows the
+result, the load drawn as a red line on the flat and on the simulated knit.
 
 Edit the inputs below and run
     python scripts/simulate_point_load.py
@@ -26,8 +27,7 @@ field_name = "circular_flat_2part"  # the field <field_name>_vertex_directional_
 E_course = 5000.0  # N/m, along the course, across the directional field
 E_wale = 12500.0  # N/m, along the wale, the knitting direction of the directional field
 nu = 0.198
-pressure = 1000.0  # Pa
-stretch_wale, stretch_course = 1.1, 1.1  # pre-strain of the fabrication, 1: none
+stretch_wale, stretch_course = 1.1, 1.1  # pre-strain of the fabrication; above 1, so the flat knit is taut
 
 load_point = (0.0, 0.0)  # m, where the load is, in plan
 load_force = (0.0, 0.0, -100.0)  # N, fixed in size and direction; -z: down
@@ -56,20 +56,17 @@ if not len(loaded):
     loaded = [int(np.argmin(distance))]
 point_loads = [(v, np.array(load_force) / len(loaded)) for v in loaded]
 
-print("{} vertices, {} triangles, {} anchors on the boundary, p = {:.0f} Pa".format(len(V), len(F), len(anchors), pressure))
+print("{} vertices, {} triangles, {} anchors on the boundary".format(len(V), len(F), len(anchors)))
 print("E_wale {:.0f} N/m, E_course {:.0f} N/m, nu {}, field {}".format(E_wale, E_course, nu, field_name))
 print("point load {} N at {} m, on {} vertices".format(tuple(load_force), tuple(load_point), len(loaded)))
-results = {}
-for label, loads in (("inflated", []), ("point load", point_loads)):
-    out = os.path.join(folder, "out", "{}_point_load_{:g}".format(field_name, np.linalg.norm(load_force) if loads else 0))
-    r = simulate(mesh, field, out, E_wale, E_course, nu, pressure, stretch_wale=stretch_wale, stretch_course=stretch_course,
-                 fixed_vertices=anchors, mass=0.0, point_loads=loads)
-    s = r["summary"]
-    print("{:11s} crown height {:.4f} m, height at the load {:.4f} m, max stress {:.0f} N/m ({})".format(
-        label, s["crown_height"], r["vertices"][loaded, 2].mean(), s["max_stress"], s["status"]))
-    results[label] = (out, r)
 
+out = os.path.join(folder, "out", "{}_point_load_{:g}".format(field_name, np.linalg.norm(load_force)))
+result = simulate(mesh, field, out, E_wale, E_course, nu, 0.0, stretch_wale=stretch_wale, stretch_course=stretch_course,
+                  fixed_vertices=anchors, mass=0.0, point_loads=point_loads)
+s = result["summary"]
+print("height at the load {:.4f} m, lowest point {:.4f} m, max stress {:.0f} N/m, mean stress {:.0f} N/m ({})".format(
+    result["vertices"][loaded, 2].mean(), result["vertices"][:, 2].min(), s["max_stress"], s["mean_stress"], s["status"]))
 print("results in", os.path.join(folder, "out"))
 
-out = results["point load"][0]
-view_simulation(mesh, out + "_deformed.obj", out + "_stress.csv", quantity=quantity, field=field, show_field=show_field)
+view_simulation(mesh, out + "_deformed.obj", out + "_stress.csv", quantity=quantity, field=field, show_field=show_field,
+                loads=point_loads)
