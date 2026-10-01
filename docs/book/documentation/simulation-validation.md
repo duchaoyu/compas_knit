@@ -44,12 +44,12 @@ start, so both programs get the same small pre-tension, a stretch of 1.001, in C
 
 Crown height in metres, p = 1000 Pa.
 
-| Material (N/m) | Wale | Hencky | CalculiX | knit_sim | knit_sim before the fix |
-|---|---|---|---|---|---|
-| isotropic, E 10000, nu 0.3 | — | 0.1550 | 0.1538 | 0.1538 | 0.2263 |
-| E_w 10300, E_c 13400, nu 0.58 | x | — | 0.1245 | 0.1245 | 0.1823 |
-| E_w 5000, E_c 2500, nu 0.198 | x | — | 0.2268 | 0.2268 | 0.3397 |
-| E_w 12500, E_c 5000, nu 0.198 | y | — | 0.1684 | 0.1684 | 0.2489 |
+| Material (N/m) | Wale | Hencky | CalculiX | knit_sim |
+|---|---|---|---|---|
+| isotropic, E 10000, nu 0.3 | — | 0.1550 | 0.1538 | 0.1538 |
+| E_w 10300, E_c 13400, nu 0.58 | x | — | 0.1245 | 0.1245 |
+| E_w 5000, E_c 2500, nu 0.198 | x | — | 0.2268 | 0.2268 |
+| E_w 12500, E_c 5000, nu 0.198 | y | — | 0.1684 | 0.1684 |
 
 The same 10300 / 13400 material at 1100 and 1200 Pa: 0.1287 and 0.1327 m, in both programs.
 
@@ -61,14 +61,12 @@ and is 0.8 % above both; on a finer disc, `scripts/tests/simulate_disc.py`, `kni
 | edge 0.04 m | 1015 | 0.1219 | 0.1220 (+0.06 %) |
 | edge 0.02 m | 3929 | 0.1219 | 0.1219 (+0.00 %) |
 
-## The pressure fix
+## The pressure work
 
-The orthotropic and isotropic StVK elements of fabsim took the work of the pressure on a triangle as
-(x0 + x1 + x2) · n / 6, with n = (x0 − x2) × (x1 − x2). That is three times the volume of the tetrahedron the triangle
-makes with the origin, x0 · (x1 × x2) / 6, so the pressure acted three times over, and the crown height came out
-3^(1/3) ≈ 1.44 times too high, the last column above. The stresses, the reactions and the cable tensions were three
-times too high too. `src/cpp_sim/patches/fabsim_pressure_volume.patch` divides by 18 in the energy and the gradient,
-and the Hessian likewise, and is applied to fabsim when `knit_sim` is built.
+The work of the pressure on a triangle is p times the volume of the tetrahedron it makes with the origin,
+x0 · (x1 × x2) / 6 = (x0 + x1 + x2) · n / 18, with n = (x0 − x2) × (x1 − x2).
+`src/cpp_sim/patches/fabsim_pressure_volume.patch` sets this in the energy, the gradient and the Hessian of the
+orthotropic and isotropic StVK elements of fabsim, and is applied when `knit_sim` is built.
 
 ## The current example
 
