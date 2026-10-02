@@ -4,14 +4,14 @@ A flat circular membrane, anchored on its boundary and inflated, is the simplest
 height is compared with Hencky's analytical solution, for an isotropic membrane, and with an independent finite
 element program, CalculiX, for the knit.
 
-![The flat dome inflated, scripts/simulate.py, shaded by the von Mises stress](../.gitbook/assets/flat-dome.png)
+![The flat dome inflated, scripts/sim/simulate.py, shaded by the von Mises stress](../.gitbook/assets/flat-dome.png)
 
 ## The sample
 
 `data/circular_flat/circular_flat.obj`, the circular flat mesh of the fabsim examples: 399 vertices, 735 triangles,
 radius a = 0.5985 m, flat in the xy plane with its normals along +z. The 61 boundary vertices are anchored and the
 pressure is p = 1000 Pa. The knitting direction, the wale, is read per vertex from
-`circular_flat_vertex_directional_field.txt`. `scripts/simulate.py` runs it and shows the result.
+`circular_flat_vertex_directional_field.txt`. `scripts/sim/simulate.py` runs it and shows the result.
 
 ## Hencky's solution
 
@@ -78,9 +78,9 @@ inflated surface of 1.2227 m2:
 | 10 mm | 24 | 287.6 | 0.1526 | 0.1526 |
 | 20 mm | 48 | 575.2 | 0.1324 | 0.1324 |
 
-`scripts/simulate_inf_concrete.py` is the example: the two-pattern field and the stretch factors 1.1 and 1.1, with
+`scripts/sim/simulate_inf_concrete.py` is the example: the two-pattern field and the stretch factors 1.1 and 1.1, with
 10 mm of concrete, 268 N, lowers the crown from 0.0741 to 0.0584 m; the pressure, 1000 Pa over a plan of 1.125 m2,
-about 1125 N, still holds it up. `scripts/simulate_concrete.py` has the concrete only, without the pressure: cast on the
+about 1125 N, still holds it up. `scripts/sim/simulate_concrete.py` has the concrete only, without the pressure: cast on the
 flat knit, it stretches it down, a hanging shape.
 
 ## A point load
@@ -97,7 +97,7 @@ on the vertex nearest the centre; the height there, in metres:
 | 200 N | 0.0357 | 0.0357 |
 
 A membrane has no bending stiffness, so the dent under a load on a single vertex depends on the size of the mesh: the
-finer the mesh, the deeper and sharper. `scripts/simulate_point_load.py` is the example, without pressure: 100 N down
+finer the mesh, the deeper and sharper. `scripts/sim/simulate_point_load.py` is the example, without pressure: 100 N down
 at the centre of the flat knit of the two-pattern field, stretched 1.1 and 1.1, pulls it down to -0.0513 m there. Its
 `load_radius` shares the load among the vertices within it, the size of what pushes on the knit. The viewer draws the
 load as a red line, on the flat and on the simulated knit.
@@ -111,7 +111,7 @@ orthotropic and isotropic StVK elements of fabsim, and is applied when `knit_sim
 
 ## The current example
 
-`scripts/simulate.py` with E_w 12500, E_c 5000, nu 0.198 and the stretch factors 1.1 and 1.1, at 1000 Pa, with either
+`scripts/sim/simulate.py` with E_w 12500, E_c 5000, nu 0.198 and the stretch factors 1.1 and 1.1, at 1000 Pa, with either
 field of the mesh, chosen by `field_name`:
 
 | Field | Crown height (m) | von Mises stress (N/m) |
@@ -127,9 +127,9 @@ only approximates at large strains, so these are not in the comparison.
 ## Run it
 
 ```
-python scripts/simulate.py               # the example, and the viewer
-python scripts/simulate_inf_concrete.py  # the same, then a layer of concrete on the inflated knit
-python scripts/simulate_concrete.py      # a layer of concrete only, without the pressure
-python scripts/simulate_point_load.py    # a point load on the flat knit, without the pressure
+python scripts/sim/simulate.py               # the example, and the viewer
+python scripts/sim/simulate_inf_concrete.py  # the same, then a layer of concrete on the inflated knit
+python scripts/sim/simulate_concrete.py      # a layer of concrete only, without the pressure
+python scripts/sim/simulate_point_load.py    # a point load on the flat knit, without the pressure
 python scripts/tests/simulate_disc.py    # the discs against Hencky, fails if more than 2 % off
 ```

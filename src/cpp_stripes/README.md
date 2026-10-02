@@ -21,7 +21,7 @@ CMake downloads libigl, polyscope and geometry-central at the same revisions as 
 ## Run
 
 From Python, `compas_knit.stripes.generate_stripes(mesh, field, stitch_height, stitch_width)` calls this with
-`--size 0 --spacing 2*stitch_height --stitch-width stitch_width`, see `scripts/trajectories.py`.
+`--size 0 --spacing 2*stitch_height --stitch-width stitch_width`, see `scripts/fab/2_trajectories.py`.
 
 
 ```

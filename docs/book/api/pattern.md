@@ -57,9 +57,14 @@ consecutive trajectories meet at the right end:
   from the nearest black row above, every column keeping its stitches in order; where there is nothing above, it is at
   the boundary, and stitches are added.
 
-Added stitches take the colour `added`. `scripts/knittable.py` runs it on the pixel data of `scripts/pattern.py`.
+Where neither works, a short row ending inside the fabric on the right, the red row turns there instead: early, the
+short row's own red row knitting the rest of it on the way back to the right, or late, taking over the end of the
+next red row. Every needle keeps its number of rows; only their order changes, and the yarn is continuous.
 
-**Returns** `(pixels, report)`, the report giving the `moved` and `added` stitches, and the transitions left open.
+Added stitches take the colour `added`. `scripts/fab/4_pattern.py` runs it after `knitting_pattern`.
+
+**Returns** `(pixels, report)`, the report giving the `moved` and `added` stitches, the red rows `turned` early or
+late, and the transitions left open.
 
 ## knitting\_sequence
 
@@ -110,9 +115,9 @@ boundary_polylines(mesh, corner=60.0)
 ```
 
 The boundary of a mesh, split at its corners, where it turns by more than `corner` degrees.
-**Returns** `list[np.ndarray]` — the points of each piece. `scripts/features.py` takes the piece furthest to the
+**Returns** `list[np.ndarray]` — the points of each piece. `scripts/fab/3_features.py` takes the piece furthest to the
 left as the cable and writes it as a line to `features/cable.obj`, for when there is none drawn in Rhino.
-`scripts/pattern.py` aligns the stitches at the cable, a straight selvedge along it.
+`scripts/fab/4_pattern.py` aligns the stitches at the cable, a straight selvedge along it.
 
 ## sample\_polyline
 

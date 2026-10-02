@@ -1,21 +1,20 @@
 ********************************************************************************
-compas_knit
+compas_knit.viewer
 ********************************************************************************
 
-.. currentmodule:: compas_knit
+.. currentmodule:: compas_knit.viewer
 
 .. rst-class:: lead
 
-The package: the paths to its folders, for the scripts.
+Viewers for the mesh, the field, the trajectories and the simulated shape, in compas_viewer.
 
-Paths
-=====
+Functions
+=========
 
 .. autosummary::
     :toctree: generated/
     :nosignatures:
 
-    HOME
-    DATA
-    DOCS
-    TEMP
+    view_stripes
+    view_field
+    view_simulation

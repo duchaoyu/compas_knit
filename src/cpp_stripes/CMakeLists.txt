@@ -38,3 +38,7 @@ target_compile_options(stripes PRIVATE $<$<CONFIG:RELEASE>:
 # remove annoying Polyscope-related compiler warning
 target_compile_options(stripes PRIVATE
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:-Wno-nonnull>)
+
+# the smoothest line field on a mesh, as a directional field for stripes
+add_executable(smooth_field src/smooth_field.cpp)
+target_link_libraries(smooth_field Eigen3::Eigen geometry-central igl::core)

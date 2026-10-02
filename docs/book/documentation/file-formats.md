@@ -55,7 +55,7 @@ stripe 12.53 -470.1 -150.2 1
 field 0.0012 0.0008 0.3104 1
 ```
 
-## Knitting pattern — `<name>_export_wo_optim.bmp`, `<name>_pixel_data_dict.pkl`
+## Knitting pattern — `<name>_bitmap.bmp`, `<name>_pixel_data_dict.pkl`
 
 One pixel per stitch, two rows per trajectory: the row knitting out black, the row knitting back red. The bitmap is
 flipped top to bottom for the machine software; the pickle holds `{(x, y): (r, g, b)}` unflipped, from (0, 0), for

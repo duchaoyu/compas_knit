@@ -22,7 +22,6 @@ def view_stripes(
     trajectories,
     links=None,
     singularities=None,
-    show_sequence=True,
     view="top",
     show_mesh=True,
     colors=("#fb8500", "#1a7431"),
@@ -38,15 +37,11 @@ def view_stripes(
     links : list[tuple[int, int, int]], optional
         The links between neighbouring trajectories, as returned by :func:`compas_knit.stripes.read_neighbours`.
         The trajectories are then coloured by their position in the knitting order, see
-        :func:`compas_knit.stripes.order_trajectories`, from the first colour to the second, and a checkbox
-        in the side panel switches between that and black.
+        :func:`compas_knit.stripes.order_trajectories`, from the first colour to the second; without, black.
     singularities : list[tuple[str, list[float], int]], optional
         As returned by :func:`compas_knit.stripes.read_singularities`, shown as points: stripe singularities,
         where a trajectory ends, blue, field singularities black.
         Those with an index beyond one are drawn larger.
-    show_sequence : bool, optional
-        Start with the trajectories coloured by their position in the knitting order, needs ``links``.
-        Otherwise, and without ``links``, they are all black.
     view : {"top", "perspective", "front", "right"}, optional
         The initial view. Switch views in the viewer under View.
     show_mesh : bool, optional
@@ -56,8 +51,6 @@ def view_stripes(
 
     """
     from compas_viewer import Viewer  # optional dependency
-
-    from compas_viewer.components.booleantoggle import BooleanToggle
     from compas_viewer.scene import Collection
 
     from compas_knit.stripes import order_trajectories
@@ -65,15 +58,13 @@ def view_stripes(
     if isinstance(mesh, str):
         mesh = Mesh.from_obj(mesh)
 
-    plain_colors = [Color.black()] * len(trajectories)
-    sequence_colors = None
+    line_colors = [Color.black()] * len(trajectories)
     if links is not None:
         position, cyclic = order_trajectories(links, len(trajectories))
         if cyclic:
             print("warning: {} trajectories are on a cycle of links, the knitting needs a seam there".format(len(cyclic)))
         top = max(max(position), 1)
-        sequence_colors = [_blend(colors[0], colors[1], p / top) for p in position]
-    line_colors = sequence_colors if (show_sequence and sequence_colors) else plain_colors
+        line_colors = [_blend(colors[0], colors[1], p / top) for p in position]
 
     viewer = Viewer()
     viewer.renderer.view = view
@@ -93,24 +84,10 @@ def view_stripes(
     tree = cKDTree(xyz)
 
     group = viewer.scene.add_group(name="trajectories")
-    objects = []
     for i, (polyline, color) in enumerate(zip(trajectories, line_colors)):
         points = np.array([list(point) for point in polyline.points])
         points = points + lift * normals[tree.query(points)[1]]
-        objects.append(group.add(Polyline(points.tolist()), name="trajectory {}".format(i), linecolor=color, linewidth=2))
-
-    if sequence_colors:
-        # a checkbox in the side panel switches between the knitting order and one colour
-        state = {"show_sequence": bool(show_sequence)}
-
-        def recolor(component, checked):
-            for obj, color in zip(objects, sequence_colors if checked else plain_colors):
-                obj.linecolor = color
-                obj.update(update_data=True)
-            viewer.renderer.update()
-
-        viewer.ui.sidedock.show = True  # the config is read when the viewer is made, so show the panel directly
-        viewer.ui.sidedock.add(BooleanToggle(state, "show_sequence", title="Show sequence", action=recolor))
+        group.add(Polyline(points.tolist()), name="trajectory {}".format(i), linecolor=color, linewidth=2)
 
     if singularities:
         # one scene object per kind, so each can be switched on and off in the scene panel
@@ -137,22 +114,25 @@ def view_stripes(
     viewer.show()
 
 
-def view_field(mesh, field, view="top", length=None):
+def view_field(mesh, field, view="top", length=None, points=None):
     """Show the mesh and the directional field. Blocks until the window is closed.
 
-    The field is a line field, so each vertex gets a segment centred on it, without an arrowhead.
-    The vectors are projected into the tangent plane at each vertex, as the stripes executable does.
+    The field is a line field, so each vertex, or each face for a field per face, gets a segment centred on it, without
+    an arrowhead. The vectors are projected into the tangent plane there, as the stripes executable does.
 
     Parameters
     ----------
     mesh : str | :class:`compas.datastructures.Mesh`
         The mesh, or the path to an ``.obj`` file.
     field : str | array-like
-        Per-vertex directional field, one ``x y z`` vector per vertex in mesh vertex order, or the path to its file.
+        The directional field, one ``x y z`` vector per vertex, or per face, in the order of the mesh, or the path to
+        its file.
     view : {"top", "perspective", "front", "right"}, optional
         The initial view. Switch views in the viewer under View.
     length : float, optional
         Length of the segments. Defaults to 0.8 times the mean edge length.
+    points : array, optional
+        Points to mark in red, e.g. the vertices where the field is held.
 
     """
     from compas_viewer import Viewer  # optional dependency
@@ -165,19 +145,29 @@ def view_field(mesh, field, view="top", length=None):
     xyz, faces = _mesh_arrays(mesh)
     if isinstance(mesh, str):
         mesh = Mesh.from_vertices_and_faces(xyz.tolist(), faces.tolist())
-    if isinstance(field, str):
-        field = np.loadtxt(field)
-    field = np.asarray(field, dtype=float)[:, :3]
-    if len(field) != len(xyz):
-        raise ValueError("The field has {} vectors, the mesh {} vertices.".format(len(field), len(xyz)))
+    from compas_knit.field import read_field
 
-    normals = _vertex_normals(xyz, faces)
+    if isinstance(field, str):
+        field, on = read_field(field, xyz, faces)
+    else:
+        field = np.asarray(field, dtype=float)[:, :3]
+        on = "faces" if len(field) == len(faces) and len(field) != len(xyz) else "vertices"
+        if len(field) != len(xyz) and on == "vertices":
+            raise ValueError("The field has {} vectors; the mesh {} vertices and {} faces.".format(len(field), len(xyz), len(faces)))
+
+    if on == "faces":
+        normals = np.cross(xyz[faces[:, 1]] - xyz[faces[:, 0]], xyz[faces[:, 2]] - xyz[faces[:, 0]])
+        normals /= np.maximum(np.linalg.norm(normals, axis=1), 1e-300)[:, None]
+        at = xyz[faces].mean(axis=1)
+    else:
+        normals = _vertex_normals(xyz, faces)
+        at = xyz
     tangent = field - (field * normals).sum(axis=1)[:, None] * normals
     tangent /= np.maximum(np.linalg.norm(tangent, axis=1), 1e-12)[:, None]
     mean_edge = np.mean([mesh.edge_length(edge) for edge in mesh.edges()])
-    half = (length or 0.8 * mean_edge) / 2
+    half = (length or (0.5 if on == "faces" else 0.8) * mean_edge) / 2
     # lift the segments a little off the surface, so the faces do not draw over them
-    centres = xyz + 0.02 * mean_edge * normals
+    centres = at + 0.02 * mean_edge * normals
     lines = [Line(p - half * t, p + half * t) for p, t in zip(centres, tangent)]
 
     viewer = Viewer()
@@ -186,6 +176,8 @@ def view_field(mesh, field, view="top", length=None):
 
     viewer.scene.add(mesh, name="mesh", facecolor=Color.grey().lightened(70), linecolor=Color.grey().lightened(40), opacity=0.8)
     viewer.scene.add(Collection(lines), name="field", linecolor=Color.from_hex("#1f4e79"), linewidth=2)
+    if points is not None and len(points):
+        viewer.scene.add(Collection([Point(*p) for p in np.asarray(points)]), name="points", show_points=True, pointcolor=Color.red(), pointsize=10)
 
     _frame(viewer, xyz, view)
     viewer.show()
@@ -265,8 +257,7 @@ def view_simulation(
     print("largest displacement {:.4g} m".format(np.linalg.norm(xyz - xyz0, axis=1).max()))
 
     viewer = Viewer()
-    # the top view is a perspective view looking straight down, so it can still be rotated with the right mouse button
-    viewer.renderer.view = "perspective" if view == "top" else view
+    viewer.renderer.view = view
     viewer.config.renderer.show_grid = False
 
     viewer.scene.add(before, name="original", show_faces=False, linecolor=Color.black(), linewidth=1)
@@ -316,17 +307,7 @@ def view_simulation(
             lines = [Line(surface[v] - scale * f, surface[v]) for (v, _), f in zip(loads, forces)]
             viewer.scene.add(Collection(lines), name=label, linecolor=Color.from_hex("#c0392b"), linewidth=4)
 
-    points = np.r_[xyz0, xyz]
-    _frame(viewer, points, view)
-    if view == "top":
-        # looking straight down, far enough for the perspective to show the whole plan
-        camera = viewer.renderer.camera
-        camera.rotation.set(0, 0, 0)
-        window = viewer.config.window
-        aspect = (window.width - 300) / window.height
-        span = points.max(axis=0) - points.min(axis=0)
-        half = 0.55 * max(span[0] / aspect, span[1])
-        camera.distance = half / np.tan(np.radians(camera.fov) / 2) + span[2]
+    _frame(viewer, np.r_[xyz0, xyz], view)
     viewer.show()
 
 
@@ -353,7 +334,11 @@ def _blend(first, last, t):
 
 
 def _frame(viewer, points, view):
-    """Point the camera at the centre of the points and zoom so they fill the window."""
+    """Point the camera at the centre of the points and zoom so they fill the window.
+
+    The top view is a perspective view looking straight down, so that it can still be rotated with the right mouse
+    button; the other orthographic views of compas_viewer cannot.
+    """
     box = bounding_box(points)
     xmin, ymin, zmin = box[0]
     xmax, ymax, zmax = box[6]
@@ -371,3 +356,8 @@ def _frame(viewer, points, view):
     camera.reset_position(view)
     camera.target.set(*centre)
     camera.distance = distance
+    if view == "top":
+        # looking straight down, far enough for the perspective to show the whole plan
+        viewer.renderer.view = "perspective"
+        camera.rotation.set(0, 0, 0)
+        camera.distance = 0.55 * max(w / aspect, h) / np.tan(np.radians(camera.fov) / 2) + (zmax - zmin)

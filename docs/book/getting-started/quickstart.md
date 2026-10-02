@@ -13,7 +13,7 @@ See [File formats](../documentation/file-formats.md).
 
 ## 2. Trajectories
 
-Open `scripts/trajectories.py` and set the inputs in the `MODIFY` block:
+Open `scripts/fab/2_trajectories.py` and set the inputs in the `MODIFY` block:
 
 ```python
 folder = os.path.join(DATA, "2part_remesh2")
@@ -27,7 +27,7 @@ view = True            # show the mesh and the trajectories, from the top
 ```
 
 ```bash
-python scripts/trajectories.py
+python scripts/fab/2_trajectories.py
 ```
 
 It writes to `<folder>/out/`, which git ignores: the trajectories, their stitches, which trajectory comes after which,
@@ -35,7 +35,7 @@ and the singularities. With `view = True`, a viewer opens in top view, the traje
 
 ## 3. Knitting pattern
 
-Open `scripts/pattern.py`, set the same `folder` and `name`, and the needle bed:
+Open `scripts/fab/4_pattern.py`, set the same `folder` and `name`, and the needle bed:
 
 ```python
 bed_width = 365      # needles on the bed; the knitting pattern has to fit
@@ -47,15 +47,17 @@ features = [         # (feature, colour): the stitches of each feature take its 
 ```
 
 The features are `.obj` files in `<folder>/features/`, as Rhino exports them: points (`p` records), each taking the
-stitch nearest to it, and lines (`l` records), taking every stitch they pass over. `python scripts/features.py` writes
+stitch nearest to it, and lines (`l` records), taking every stitch they pass over. `python scripts/fab/3_features.py` writes
 the cable, the boundary piece furthest to the left, as a line, for when none is drawn in Rhino.
 
 ```bash
-python scripts/pattern.py
+python scripts/fab/4_pattern.py
 ```
 
-It writes the bitmap `<name>_export_wo_optim.bmp` and the pixel data `<name>_pixel_data_dict.pkl` for the
-post-processing scripts.
+It writes the bitmap `<name>_bitmap.bmp` and the pixel data `<name>_pixel_data_dict.pkl`, then makes the
+pattern knittable from one yarn carrier and writes `<name>_opt_bitmap.bmp` and
+`<name>_pixel_data_dict_knittable.pkl`, and shows the pattern before and after, each in its own window
+(`show = False` to skip).
 
 <!-- TODO: screenshot of the viewer -->
 <!-- ![](../.gitbook/assets/quickstart-viewer.png) -->

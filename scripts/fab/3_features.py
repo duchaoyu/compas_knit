@@ -1,11 +1,11 @@
 """A line feature along the boundary of the mesh, for when there is none drawn in Rhino.
 
 Splits the boundary of the mesh at its corners and writes the piece furthest to the left (the lowest x), where the
-cable runs, as a line to `<folder>/features/cable.obj`. `scripts/pattern.py` reads the features in that folder, points
+cable runs, as a line to `<folder>/features/cable.obj`. `scripts/fab/4_pattern.py` reads the features in that folder, points
 and lines, e.g. also `bdr_anchors.obj` exported from Rhino.
 
 Edit the inputs below and run
-    python scripts/features.py
+    python scripts/fab/3_features.py
 """
 import os
 

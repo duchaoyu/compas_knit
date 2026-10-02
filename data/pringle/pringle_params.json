@@ -1,0 +1,13 @@
+{
+ "stitch_height": 2.297,
+ "stitch_width": 3.54,
+ "stretch_wale": 1.05,
+ "stretch_course": 1.05,
+ "units": 0.001,
+ "E_wale": 12500.0,
+ "E_course": 5000.0,
+ "nu": 0.198,
+ "concrete_thickness": 10.0,
+ "concrete_density": 2400.0,
+ "pressure": 0.0
+}

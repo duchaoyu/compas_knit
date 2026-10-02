@@ -1,21 +1,19 @@
 ********************************************************************************
-compas_knit
+compas_knit.simulation
 ********************************************************************************
 
-.. currentmodule:: compas_knit
+.. currentmodule:: compas_knit.simulation
 
 .. rst-class:: lead
 
-The package: the paths to its folders, for the scripts.
+Finite element simulation of the knit, with the knit_sim executable.
 
-Paths
-=====
+Functions
+=========
 
 .. autosummary::
     :toctree: generated/
     :nosignatures:
 
-    HOME
-    DATA
-    DOCS
-    TEMP
+    simulate
+    write_mesh

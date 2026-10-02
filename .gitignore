@@ -10,3 +10,5 @@ dist/
 
 # outputs of the scripts, next to the inputs in data/
 data/**/out/
+docs/_build/
+docs/api/generated/

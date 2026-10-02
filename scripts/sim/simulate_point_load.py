@@ -8,7 +8,7 @@ pushes on the knit, makes it independent of it. Writes `<field_name>_point_load_
 result, the load drawn as a red line on the flat and on the simulated knit.
 
 Edit the inputs below and run
-    python scripts/simulate_point_load.py
+    python scripts/sim/simulate_point_load.py
 """
 import os
 

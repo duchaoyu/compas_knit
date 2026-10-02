@@ -24,6 +24,7 @@ __all__ = [
     "boundary_polylines",
     "sample_polyline",
     "read_feature",
+    "pattern_image",
     "write_feature",
     "knitting_pattern",
     "knittable",
@@ -504,10 +505,14 @@ def knittable(pixels, gap=3, reach=50, added=ADDED):
     turn at their left end, and consecutive trajectories meet at the right end:
 
     * where the next black row starts further right than the red row ended, the red row is continued to it, if there
-      are no stitches beneath: the addition is at the boundary, so it hardly changes the geometry;
+      are no stitches beneath: the addition is at the boundary, so it hardly changes the geometry; where there are, the
+      red row turns late instead: it takes over the end of the next red row, over those needles;
     * where it starts more than ``gap`` needles further left, the black stitches above those needles are moved down
       into it, from the nearest black row above, keeping every column in order; where there is nothing above, it is at
-      the boundary, and stitches are added.
+      the boundary, and stitches are added;
+    * where that cannot be done, a short row ending inside the fabric on the right, the red row before it turns early,
+      where the black row starts, and the rest of it is knitted by the short row's red row on its way back to the
+      right. Turned early or late, every needle keeps its number of rows, only their order changes.
 
     The added stitches take the colour ``added``.
 
@@ -528,14 +533,15 @@ def knittable(pixels, gap=3, reach=50, added=ADDED):
     tuple[dict, dict]
         The pixels, and a report: ``moved`` stitches, stitches ``added``, and the transitions left open: red rows that
         could not be continued because of stitches beneath, ``red_open``, black rows that could not be connected,
-        ``black_open``, and red rows not starting where their black row ended, ``turn_open``.
+        ``black_open``, and red rows not starting where their black row ended, ``turn_open``; and the red rows that
+        ``turned`` early for a short row on the right.
 
     """
     rows = {}
     for (x, y), color in pixels.items():
         rows.setdefault(y, {})[x] = color
     top = max(rows)
-    report = {"moved": 0, "added": 0, "red_open": 0, "black_open": 0, "turn_open": 0}
+    report = {"moved": 0, "added": 0, "turned": 0, "red_open": 0, "black_open": 0, "turn_open": 0}
 
     for y in range(1, top + 1):
         if not rows.get(y) or not rows.get(y - 1):
@@ -551,37 +557,98 @@ def knittable(pixels, gap=3, reach=50, added=ADDED):
             # continue the red row to the start, if there is nothing beneath
             needles = range(end + 1, start + 1)
             if any(x in rows.get(q, {}) for q in range(y - 1) for x in needles):
-                report["red_open"] += 1
+                # the red row turns late instead: it takes the end of the next red row, the black row's own, over
+                # these needles, which keeps the number of rows on each of them
+                red = rows.get(y + 1, {})
+                if all(x in red for x in needles) and max(red) == start and not any(x in rows[y - 1] for x in needles):
+                    for x in needles:
+                        rows[y - 1][x] = red.pop(x)
+                    report["turned"] += 1
+                else:
+                    report["red_open"] += 1
             else:
                 for x in needles:
                     rows[y - 1][x] = added
                     report["added"] += 1
         elif end - start > gap:
             # move down the black stitches above those needles, or add stitches where there are none
+            moved, made, failed = [], [], False
             x = start + 1
             while x <= end:
                 above = next((q for q in range(y + 2, min(y + reach, top + 1), 2) if x in rows.get(q, {})), None)
                 if above is None:
                     if any(x in rows.get(q, {}) for q in range(y + 1, top + 1)):
-                        report["black_open"] += 1  # stitches above, but no black one within reach
+                        failed = True  # stitches above, but no black one within reach
                         break
                     for c in range(x, end + 1):  # nothing above: the boundary
                         rows[y][c] = added
-                        report["added"] += 1
+                        made.append(c)
                     break
                 run = [c for c in sorted(rows[above]) if c >= x]
                 # moved down, a stitch passes the rows in between: none of them may have a stitch in its column, and the
                 # row it leaves has to stay in one piece, so its part beyond where the yarn is cannot be left behind
                 if run[-1] > end or any(c in rows.get(q, {}) for q in range(y + 1, above) for c in run):
-                    report["black_open"] += 1
+                    failed = True
                     break
                 for c in run:
                     rows[y][c] = rows[above].pop(c)
-                    report["moved"] += 1
+                    moved.append((c, above))
                 x = run[-1] + 1
+            if failed:
+                # undo, and turn the red row early instead, if the short row's red row can take the rest of it
+                for c, above in moved:
+                    rows[above][c] = rows[y].pop(c)
+                for c in made:
+                    del rows[y][c]
+                moved, made = [], []
+                red, tail = rows.get(y + 1), [c for c in rows[y - 1] if c > start]
+                if red and max(red) == start and not any(c in red or c in rows[y] for c in tail):
+                    for c in tail:
+                        red[c] = rows[y - 1].pop(c)
+                    report["turned"] += 1
+                else:
+                    report["black_open"] += 1
+            report["moved"] += len(moved)
+            report["added"] += len(made)
 
     out = {(x, y): c for y, row in rows.items() for x, c in row.items()}
     return out, report
+
+
+VIEW_COLORS = {BACK: (160, 160, 160)}  # to look at the pattern: the rows knitting back grey, the others as they are
+
+
+def pattern_image(pixels, scale=1, colors=None):
+    """The pattern as an image, one pixel per stitch, the first row at the bottom, as the bitmap for the machine.
+
+    Parameters
+    ----------
+    pixels : dict
+        ``{(x, y): (r, g, b)}``, see :func:`knitting_pattern`.
+    scale : int, optional
+        Pixels per stitch, to look at it.
+    colors : dict, optional
+        Colours to show in place of others, e.g. :data:`VIEW_COLORS`, the rows knitting back grey; the bitmap for the
+        machine keeps its colours, which code the operations.
+
+    Returns
+    -------
+    :class:`PIL.Image.Image`
+
+    """
+    from PIL import Image
+
+    xs = [x for x, _ in pixels]
+    ys = [y for _, y in pixels]
+    x0, y0 = min(xs), min(ys)
+    image = Image.new("RGB", (max(xs) - x0 + 1, max(ys) - y0 + 1), "white")
+    colors = colors or {}
+    for (x, y), color in pixels.items():
+        image.putpixel((x - x0, y - y0), colors.get(color, color))
+    image = image.transpose(Image.FLIP_TOP_BOTTOM)
+    if scale > 1:
+        image = image.resize((image.width * scale, image.height * scale), Image.NEAREST)
+    return image
 
 
 def write_pattern(pixels, bitmap_path, pickle_path=None, bed_width=None):
@@ -604,19 +671,11 @@ def write_pattern(pixels, bitmap_path, pickle_path=None, bed_width=None):
         The width and height of the bitmap.
 
     """
-    from PIL import Image
-
-    xs = [x for x, _ in pixels]
-    ys = [y for _, y in pixels]
-    width = max(xs) - min(xs) + 1
-    height = max(ys) - min(ys) + 1
+    image = pattern_image(pixels)
+    width, height = image.size
     if bed_width and width > bed_width:
         raise ValueError("The pattern is {} stitches wide, more than the needle bed of {}.".format(width, bed_width))
-    x0, y0 = min(xs), min(ys)
-    image = Image.new("RGB", (width, height), "white")
-    for (x, y), color in pixels.items():
-        image.putpixel((x - x0, y - y0), color)
-    image.transpose(Image.FLIP_TOP_BOTTOM).save(bitmap_path)
+    image.save(bitmap_path)
     if pickle_path:
         with open(pickle_path, "wb") as f:
             pickle.dump(pixels, f)

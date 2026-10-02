@@ -1,12 +1,14 @@
-"""Simulation: inflate a knit membrane, then cast a thin layer of concrete on it (Section 6.3).
+"""Simulation: inflate a knit membrane (Section 6.3).
 
-The circular flat mesh, anchored on its boundary, inflated by a pressure as in `scripts/simulate.py`; then, the pressure
-held, a layer of concrete cast on the inflated surface: its weight G = area x density x thickness x g, the area of each
-triangle on the inflated surface, acting straight down, put on in steps of 10, 50 and 100 %. The knit is simulated with and without the concrete, and the one with is shown, shaded by the stress.
-Writes `<field_name>_concrete_*` to `<folder>/out/`.
+The circular flat mesh, anchored on its boundary, inflated by a pressure. The knit is an orthotropic membrane, E_wale
+along the knitting direction, read per vertex from `<field_name>_vertex_directional_field.txt` as for the
+trajectories, and E_course across it. Two fields come with the mesh: `circular_flat`, the wale along y, and
+`circular_flat_2part`, the two-pattern disc, turning from about 40 to 90 degrees from x. Writes
+`<field_name>_deformed.obj`, `_stress.csv` and `_summary.json` to `<folder>/out/`, then shows the simulated geometry over the original one, shaded by the stress, with a checkbox for
+the field.
 
 Edit the inputs below and run
-    python scripts/simulate_inf_concrete.py
+    python scripts/sim/simulate.py
 """
 import os
 
@@ -28,9 +30,6 @@ nu = 0.198
 pressure = 1000.0  # Pa
 stretch_wale, stretch_course = 1.1, 1.1  # pre-strain of the fabrication, 1: none
 
-concrete_density = 2400.0  # kg/m3
-concrete_thickness = 0.01  # m
-
 quantity = "von_mises"  # the stress to shade by: principal_1, principal_2, T_wale_Nm, T_course_Nm, S11, S22, S12
 show_field = False  # start the viewer with the directional field shown
 # -------------------------------------------------------------------------
@@ -47,26 +46,16 @@ mesh = os.path.join(folder, name + ".obj")
 field = os.path.join(folder, field_name + "_vertex_directional_field.txt")  # the knitting direction, the wale, per vertex
 V, F = read_mesh(mesh)
 anchors = boundary_vertices(F)
-concrete = concrete_density * concrete_thickness  # kg/m2
 
+out = os.path.join(folder, "out", field_name)
+result = simulate(mesh, field, out, E_wale, E_course, nu, pressure,
+                  stretch_wale=stretch_wale, stretch_course=stretch_course, fixed_vertices=anchors, mass=0.0)
+
+s = result["summary"]
 print("{} vertices, {} triangles, {} anchors on the boundary, p = {:.0f} Pa".format(len(V), len(F), len(anchors), pressure))
 print("E_wale {:.0f} N/m, E_course {:.0f} N/m, nu {}, field {}".format(E_wale, E_course, nu, field_name))
-print("concrete {:.0f} mm, {:.1f} kg/m2, {:.0f} Pa".format(1000 * concrete_thickness, concrete, 9.8 * concrete))
-results = {}
-for label, added in (("inflated", 0.0), ("with concrete", concrete)):
-    out = os.path.join(folder, "out", "{}_concrete_{:g}".format(field_name, added))
-    r = simulate(mesh, field, out, E_wale, E_course, nu, pressure, stretch_wale=stretch_wale, stretch_course=stretch_course,
-                 fixed_vertices=anchors, mass=0.0, added_mass=added)
-    s = r["summary"]
-    print("{:14s} crown height {:.4f} m, max stress {:.0f} N/m, mean stress {:.0f} N/m, concrete {:.0f} N ({})".format(
-        label, s["crown_height"], s["max_stress"], s["mean_stress"], s["added_weight"], s["status"]))
-    results[label] = (out, r)
-
-drop = results["inflated"][1]["vertices"][:, 2] - results["with concrete"][1]["vertices"][:, 2]
-print("the concrete lowers the crown by {:.1f} mm, the surface by up to {:.1f} mm".format(
-    1000 * (results["inflated"][1]["summary"]["crown_height"] - results["with concrete"][1]["summary"]["crown_height"]),
-    1000 * drop.max()))
+print("crown height {:.4f} m, max stress {:.0f} N/m, mean stress {:.0f} N/m ({})".format(
+    s["crown_height"], s["max_stress"], s["mean_stress"], s["status"]))
 print("results in", os.path.join(folder, "out"))
 
-out = results["with concrete"][0]
 view_simulation(mesh, out + "_deformed.obj", out + "_stress.csv", quantity=quantity, field=field, show_field=show_field)
