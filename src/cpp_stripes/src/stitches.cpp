@@ -8,8 +8,15 @@ using geometrycentral::Vector3;
 
 std::vector<Vector3> divideDistance(const std::vector<Vector3>& polyline, double width)
 {
+  if(width <= 0)
+    return {};
+  return divideDistance(polyline, [width](const Vector3&) { return width; });
+}
+
+std::vector<Vector3> divideDistance(const std::vector<Vector3>& polyline, const std::function<double(const Vector3&)>& widthAt)
+{
   std::vector<Vector3> stitches;
-  if(polyline.empty() || width <= 0)
+  if(polyline.empty())
     return stitches;
 
   Vector3 p = polyline[0];
@@ -21,6 +28,7 @@ std::vector<Vector3> divideDistance(const std::vector<Vector3>& polyline, double
   {
     Vector3 a = polyline[i], b = polyline[i + 1];
     Vector3 d = b - a;
+    double width = widthAt(p);
     // |a + s d - p| = width, the larger root is where the segment leaves the sphere around p
     double A = dot(d, d), B = 2 * dot(d, a - p), C = dot(a - p, a - p) - width * width;
     double disc = B * B - 4 * A * C;

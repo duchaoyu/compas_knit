@@ -33,11 +33,13 @@
 #include <igl/readOBJ.h>
 #include <igl/writeOBJ.h>
 
+#include <array>
 #include <complex>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <unordered_map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -53,7 +55,9 @@ const char* USAGE = R"(usage: stripes <mesh.obj> --spacing <s> --stitch-width <w
   --stitch-width <w>   width of a stitch, in units of the rescaled mesh (required): the trajectories are divided into
                        stitches, one point per stitch, written to <name>_tri_path_recons.txt
   --size <mm>          rescale the mesh so its largest extent is <mm> (default 1000), 0 keeps the mesh units
-  --field <file>       per-vertex directional field (default <name>_vertex_directional_field.txt)
+  --field <file>       per-vertex directional field (default <name>_vertex_directional_field.txt); a row
+                       "x y z sw sc" also gives the pre-strain stretch factors there, along the field (wale) and
+                       across it (course): the spacing is divided by sw and the stitch width by sc, vertex by vertex
   --out-dir <dir>      where to write the outputs (default: the mesh directory)
   --face-field <file>  also write the field averaged onto each face, one "x y z" per face
   --max-edge <e>       split the mesh edges longer than <e>, in units of the rescaled mesh (default: the stitch width);
@@ -208,7 +212,26 @@ int main(int argc, char** argv)
   std::unique_ptr<VertexPositionGeometry> geometry;
   std::tie(mesh, geometry) = readManifoldSurfaceMesh(remeshPath);
 
+  // a pre-strain varying over the mesh: columns 4 and 5 of the field, interpolated by the refinement like the field
+  const bool stretched = VD.cols() >= 5;
   VertexData<double> frequencies(*mesh, 1.0 / spacing);
+  std::vector<double> vertexWidth(mesh->nVertices(), stitchWidth);
+  double meanStretchWale = 1.0;
+  if(stretched)
+  {
+    double sum = 0, lo = 1e30, hi = -1e30, clo = 1e30, chi = -1e30;
+    for(Vertex v: mesh->vertices())
+    {
+      int i = v.getIndex();
+      frequencies[v] = VD(i, 3) / spacing;
+      vertexWidth[i] = stitchWidth / VD(i, 4);
+      sum += VD(i, 3);
+      lo = std::min(lo, VD(i, 3)); hi = std::max(hi, VD(i, 3));
+      clo = std::min(clo, VD(i, 4)); chi = std::max(chi, VD(i, 4));
+    }
+    meanStretchWale = sum / mesh->nVertices();
+    std::cout << "Pre-strain per vertex: wale " << lo << "-" << hi << ", course " << clo << "-" << chi << std::endl;
+  }
 
   geometry->requireVertexTangentBasis();
   VertexData<Vector3> vBasisX(*mesh);
@@ -302,13 +325,42 @@ int main(int argc, char** argv)
       file << "\n";
     }
   };
+  // the stitch width at a point: that of the nearest vertex of the refined mesh, found in a grid of edge-sized cells
+  struct CellHash { size_t operator()(const std::array<long, 3>& k) const { return (k[0] * 73856093) ^ (k[1] * 19349663) ^ (k[2] * 83492791); } };
+  std::unordered_map<std::array<long, 3>, std::vector<int>, CellHash> cells;
+  const double cell = maxEdge;
+  auto cellOf = [&](const Vector3& p) { return std::array<long, 3>{(long)std::floor(p.x / cell), (long)std::floor(p.y / cell), (long)std::floor(p.z / cell)}; };
+  if(stretched)
+    for(Vertex v: mesh->vertices())
+      cells[cellOf(geometry->vertexPositions[v])].push_back(v.getIndex());
+  auto widthAt = [&](const Vector3& p) {
+    auto k = cellOf(p);
+    for(long reach = 1; reach < 64; reach *= 2)
+    {
+      double best = 1e300; int nearest = -1;
+      for(long i = -reach; i <= reach; ++i)
+        for(long j = -reach; j <= reach; ++j)
+          for(long l = -reach; l <= reach; ++l)
+          {
+            auto it = cells.find({k[0] + i, k[1] + j, k[2] + l});
+            if(it == cells.end()) continue;
+            for(int v: it->second)
+            {
+              double d = norm2(geometry->vertexPositions[mesh->vertex(v)] - p);
+              if(d < best) { best = d; nearest = v; }
+            }
+          }
+      if(nearest >= 0) return vertexWidth[nearest];
+    }
+    return stitchWidth;
+  };
   // divide the trajectories into stitches; those shorter than one stitch are left out of all the outputs,
   // so that a trajectory has the same index in each of them
   std::vector<std::vector<Vector3>> stitches, kept;
   size_t nStitches = 0;
   for(const auto& polyline: polylines)
   {
-    auto divided = divideDistance(polyline, stitchWidth);
+    auto divided = stretched ? divideDistance(polyline, widthAt) : divideDistance(polyline, stitchWidth);
     if(divided.size() < 2)
       continue;
     nStitches += divided.size();
@@ -324,7 +376,7 @@ int main(int argc, char** argv)
   std::cout << "Wrote " << nStitches << " stitches to " << stitchPath << std::endl;
 
   // which trajectory comes after which along the field
-  auto links = findNeighbours(polylines, positions, normals, field, spacing);
+  auto links = findNeighbours(polylines, positions, normals, field, spacing / meanStretchWale);
   {
     std::ofstream file(neighbourPath);
     for(const Link& link: links)
